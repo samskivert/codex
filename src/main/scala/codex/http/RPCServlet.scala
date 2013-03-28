@@ -12,11 +12,10 @@ import codex.Log
 abstract class RPCServlet (log :Log) extends AbstractServlet(log) {
 
   /** We deal in string results. */
-  override type RES = Result[String]
+  override type RES = String
 
-  override def writeOutput (rsp :HSResponse, result :Result[String]) = {
+  override def writeOutput (rsp :HSResponse, result :String) = {
     rsp.setContentType("text/plain; charset=UTF-8")
-    val msg = if (result.isSuccess) result.get else ("error: " + result.error)
-    rsp.getOutputStream.write(msg.getBytes("UTF8"))
+    rsp.getOutputStream.write(result.getBytes("UTF8"))
   }
 }

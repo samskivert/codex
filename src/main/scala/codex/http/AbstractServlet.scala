@@ -59,11 +59,13 @@ abstract class AbstractServlet (log :Log) extends HttpServlet {
       ctx = mkContext(req, rsp)
       writeOutput(rsp, process(ctx))
     } catch {
-      case he :HttpException => rsp.sendError(he.code, he.getMessage)
-      case e :Throwable => {
+      case he :HttpException =>
+        rsp.setStatus(he.code)
+        rsp.setContentType("text/plain; charset=UTF-8")
+        rsp.getOutputStream.write(he.getMessage.getBytes("UTF8"))
+      case e :Throwable =>
         log.warning("Request failure", "url", req.getRequestURI, e)
         rsp.sendError(SC_INTERNAL_SERVER_ERROR);
-      }
     }
   }
 
