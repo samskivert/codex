@@ -66,19 +66,8 @@ queried symbol. These matches can be navigated using
         (buffer (get-buffer-create codex-buffer-name))
         )
     (setq codex-searched-sym name)
-    (url-retrieve (concat codex-url "query/find/" name)
-                  (lambda (status)
-                    (switch-to-buffer (current-buffer))
-                    ;; (let ((buffer (current-buffer)))
-                    ;;   (setq next-error-last-buffer buffer)
-                    ;;   (let ((rcount (with-current-buffer buffer
-                    ;;                   (codex-results-mode)
-                    ;;                   (goto-char 0)
-                    ;;                   (count-lines (point-min) (point-max))
-                    ;;                   )))
-                    ;;     (message (format "Codex found %d result(s)." rcount))
-                    ;;     (codex-next-error-function 0 nil)))
-                    ))))
+    (url-retrieve (concat codex-url "query/find/" name) 'codex-handle-query-result)
+    ))
 
 (defun pop-codex-mark ()
   "Pop back to where \\[codex-open-symbol] was last invoked."
@@ -120,6 +109,25 @@ navigate to a definition or insert an import for a class."
 (define-derived-mode codex-results-mode nil "codex"
   "Major mode for Codex search results."
   (setq next-error-function 'codex-next-error-function codex-error-pos nil))
+
+(defun codex-handle-query-result (status)
+  (let ((buffer (current-buffer)))
+    (if (eq (car status) :error)
+      (let* ((bpos (search-forward "\n\n"))
+             (body (buffer-substring bpos (point-max))))
+        (message (concat "Codex: " body)))
+      (progn
+        (setq next-error-last-buffer buffer)
+        (let ((rcount (with-current-buffer buffer
+                        (codex-results-mode)
+                        (goto-char 0)
+                        (count-lines (point-min) (point-max))
+                        )))
+          (message (format "Codex found %d result(s)." rcount))
+          (codex-next-error-function 0 nil)))
+      )
+    )
+  )
 
 (defun codex-next-error-function (arg reset)
   (let ((savepoint (point-marker)))
