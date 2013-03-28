@@ -9,6 +9,8 @@ import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import samscala.react.Signal
 import sun.misc.{Signal => SSignal, SignalHandler}
 
+import codex.http.HttpServer
+
 /** A small collection of somewhat global stuffs. */
 @Singleton class Codex @Inject() (log :Log, config :Config, httpServer :HttpServer) {
 
