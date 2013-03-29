@@ -9,11 +9,12 @@ import java.io.File
 import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.{KeyedEntity, Schema}
 import pomutil.POM
+import samscala.nexus.{Singleton => NSingleton}
 
 import codex.{Codex, Log}
 
 /** Provides project-related services. */
-@Singleton class Projects @Inject() (log :Log, codex :Codex, db :DB) {
+@Singleton class Projects @Inject() (log :Log, codex :Codex, db :DB) extends NSingleton {
   import ProjectsDB._
   import ProjectsUtil._
 
