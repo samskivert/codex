@@ -2,7 +2,7 @@
 // Codex - a multi-language code indexer and grokker
 // http://github.com/samskivert/codex
 
-package codex.model
+package codex.data
 
 import java.io.File
 

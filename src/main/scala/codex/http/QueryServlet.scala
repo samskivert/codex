@@ -7,10 +7,9 @@ package codex.http
 import com.google.inject.{Inject, Singleton}
 
 import codex.Log
-import codex.data.Projects
-import codex.model.{Loc, Project}
+import codex.data.{Loc, Project, Projects}
 
-@Singleton class QueryServlet @Inject() (log :Log) extends RPCServlet(log) {
+@Singleton class QueryServlet @Inject() (log :Log, projs :Projects) extends RPCServlet(log) {
 
   override def process (ctx :Context) = ctx.args match {
     case Seq("find", defn) => findDefn(defn, ctx.body) match {
@@ -29,10 +28,9 @@ import codex.model.{Loc, Project}
       case Array(file)         => (file, -1)
       case _ => errBadRequest("Request missing file and (optional) offset.")
     }
-    Projects.forPath(file) match {
-      case None    => errNotFound("Unable to determine project for " + file)
-      case Some(p) => Seq() // "TODO"
-    }
+    val p = projs.forPath(file).getOrElse(errNotFound("Unable to determine project for " + file))
+    // TODO: also search this project's dependencies for the defn
+    p.findDefn(defn)
   }
 
   // formats a location for responses

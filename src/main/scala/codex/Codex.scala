@@ -5,6 +5,7 @@
 package codex
 
 import com.google.inject.{AbstractModule, Guice, Inject, Singleton}
+import java.io.File
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import samscala.react.Signal
 import sun.misc.{Signal => SSignal, SignalHandler}
@@ -28,6 +29,17 @@ import codex.http.HttpServer
     exec.execute(new Runnable {
       override def run = block
     })
+  }
+
+  /** Returns our main Codex metadata directory (creating it if necessary). */
+  lazy val metaDir :File = {
+    // TODO: use appropriate directory depending on platform (maybe not $HOME)
+    val dir = new File(new File(System.getProperty("user.home")), ".codex")
+    if (!dir.exists && !dir.mkdir) {
+      log.warning("Unable to create Codex metadata directory: " + dir.getAbsolutePath)
+      // TODO: terminate?
+    }
+    dir
   }
 
   private def run () {
@@ -63,7 +75,7 @@ import codex.http.HttpServer
       super.addConnection(prio, listener).once()
   }
 
-  private[this] val _esvc = Executors.newFixedThreadPool(config.threadPoolSize)
+  private val _esvc = Executors.newFixedThreadPool(config.threadPoolSize)
 }
 
 /** The main entry point of the Codex app. */
