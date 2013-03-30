@@ -4,20 +4,17 @@
 
 package codex.http
 
-import com.google.inject.{Inject, Injector, Singleton}
 import javax.servlet.http.{HttpServlet, HttpServletRequest, HttpServletResponse}
 import org.eclipse.jetty.server.Server
 import org.eclipse.jetty.servlet.{ServletContextHandler, DefaultServlet, ServletHolder}
 import scala.io.Source
 
-import codex.{Config, Codex, Log}
+import codex._
 
 /** Customizes a Jetty server and handles HTTP requests. */
-@Singleton class HttpServer @Inject() (
-  config :Config, log :Log, inj :Injector
-) extends Server(config.httpPort) {
+class HttpServer extends Server(config.httpPort) {
 
-  def init (codex :Codex) {
+  def init () {
     // wire up our servlet context
     val ctx = new ServletContextHandler
     ctx.setContextPath("/")
@@ -31,11 +28,13 @@ import codex.{Config, Codex, Log}
           out.write("byebye\n")
           out.close
         } finally {
-          codex.exec(codex.shutdown.emit())
+          exec.execute(new Runnable() {
+            def run = shutdownSig.emit()
+          })
         }
       }
     }), "/shutdown")
-    ctx.addServlet(new ServletHolder(inj.getInstance(classOf[QueryServlet])), "/query/*")
+    ctx.addServlet(new ServletHolder(new QueryServlet), "/query/*")
     // ctx.addServlet(new ServletHolder(new DefaultServlet), "/*")
 
     // // if there's another Codex running, tell it to step aside

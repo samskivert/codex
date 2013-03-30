@@ -6,10 +6,8 @@ package codex.http
 
 import javax.servlet.http.{HttpServletRequest => HSRequest, HttpServletResponse => HSResponse}
 
-import codex.Log
-
 /** A servlet that reads and response `text/plain`. */
-abstract class RPCServlet (log :Log) extends AbstractServlet(log) {
+abstract class RPCServlet extends AbstractServlet {
 
   /** We deal in string results. */
   override type RES = String

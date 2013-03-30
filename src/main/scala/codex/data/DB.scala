@@ -4,7 +4,6 @@
 
 package codex.data
 
-import com.google.inject.{Singleton, Inject}
 import java.io.{File, FileWriter, PrintWriter}
 import java.sql.DriverManager
 import org.squeryl.PrimitiveTypeMode._
@@ -12,10 +11,10 @@ import org.squeryl.adapters.H2Adapter
 import org.squeryl.{Schema, Session}
 import scala.io.Source
 
-import codex.Log
+import codex._
 
 /** Handles some nuts and bolts of using in-app SQL databases. */
-@Singleton class DB @Inject() (log :Log) {
+object DB {
 
   // resolve the H2 driver
   Class.forName("org.h2.Driver")

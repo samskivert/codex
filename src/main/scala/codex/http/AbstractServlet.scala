@@ -8,11 +8,11 @@ import javax.servlet.http.HttpServlet
 import javax.servlet.http.{HttpServletRequest => HSRequest, HttpServletResponse => HSResponse}
 import scala.io.{Codec, Source}
 
-import codex.Log
+import codex._
 
 /** Defines a basic framework for simple servlet RPC.
   */
-abstract class AbstractServlet (log :Log) extends HttpServlet {
+abstract class AbstractServlet extends HttpServlet {
   import HSResponse._
 
   /** An exception that can be thrown to abort processing and return an error. */
@@ -64,7 +64,7 @@ abstract class AbstractServlet (log :Log) extends HttpServlet {
         rsp.setContentType("text/plain; charset=UTF-8")
         rsp.getOutputStream.write(he.getMessage.getBytes("UTF8"))
       case e :Throwable =>
-        log.warning("Request failure", "url", req.getRequestURI, e)
+        codex.log.warning("Request failure", "url", req.getRequestURI, e)
         rsp.sendError(SC_INTERNAL_SERVER_ERROR);
     }
   }

@@ -4,17 +4,16 @@
 
 package codex.data
 
-import com.google.inject.{Inject, Singleton}
 import java.io.File
 import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.{KeyedEntity, Schema}
 import pomutil.POM
-import samscala.nexus.{Singleton => NSingleton}
+import samscala.nexus.Entity
 
-import codex.{Codex, Log}
+import codex._
 
 /** Provides project-related services. */
-@Singleton class Projects @Inject() (log :Log, codex :Codex, db :DB) extends NSingleton {
+class Projects extends Entity {
   import ProjectsDB._
   import ProjectsUtil._
 
@@ -40,7 +39,7 @@ import codex.{Codex, Log}
 
   private def tryCreateProject (fqId :FqId) = None // TODO
 
-  private var _session = db.session(codex.metaDir, "projects", ProjectsDB, 1)
+  private var _session = DB.session(codex.metaDir, "projects", ProjectsDB, 1)
   private var _projects :Seq[Project] = using(_session) { projects.toSeq }
 }
 
