@@ -6,6 +6,7 @@ package codex.data
 
 import java.io.File
 import org.squeryl.KeyedEntity
+import samscala.nexus.Entity
 
 /** The source of information about a particular project. */
 class Project(
@@ -23,7 +24,7 @@ class Project(
   val rootPath :String,
   // see lastUpdated for public API
   dbLastUpdated :Long
-) extends KeyedEntity[Long] {
+) extends KeyedEntity[Long] with Entity {
   def this () = this("", "", "", "", 0L, "", 0L) // for unserializing
 
   /** A unique identifier for this project (1 or higher). */
@@ -41,7 +42,10 @@ class Project(
   /** Returns all definitions in this project with the specified name. */
   def findDefn (name :String) :Seq[Loc] = {
     println("TODO: findDefn " + this.name + " " + name)
-    Seq() // TODO
+    // TODO: check whether project is out of date, if so queue rescan
+    // TODO: search our depends
+    // TODO: also search this project's dependencies for the defn
+    Seq()
   }
 
   override def toString = s"[id=$id, name=$name, vers=$version]"
