@@ -18,17 +18,14 @@ object Codex {
     // register a signal handler to shutdown gracefully on ctrl-c
     val sigint = new SSignal("INT")
     val ohandler = SSignal.handle(sigint, new SignalHandler {
-      def handle (sig :SSignal) {
-        shutdownSig.emit()
-      }
+      def handle (sig :SSignal) = shutdownSig.emit()
     })
 
     val httpServer = new HttpServer()
     shutdownSig.onEmit {
       SSignal.handle(sigint, ohandler) // restore old signal handler
-      try {
-        httpServer.stop() // shutdown the web server
-      } catch {
+      try httpServer.stop() // shutdown the web server
+      catch {
         // if we fail to stop the web server, then just stick a fork in ourselves
         case e :Exception => log.warning("Failed to stop HTTP server.", e) ; sys.exit(255)
       }

@@ -31,9 +31,8 @@ object DB {
 
     // read the DB version file
     val vfile = new File(root, name + ".codex.vers")
-    val fileVers = try {
-      Source.fromFile(vfile).getLines.next.toInt
-    } catch {
+    val fileVers = try Source.fromFile(vfile).getLines.next.toInt
+    catch {
       case e :Throwable => 0
     }
     if (codeVers < fileVers) {

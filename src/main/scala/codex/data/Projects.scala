@@ -33,7 +33,7 @@ class Projects extends Entity {
     println("Ooh, POM " + pom)
     // TODO: insert into database, resolve depends, etc. etc.
     val p = new Project(pom.name getOrElse root.getName, pom.groupId, pom.artifactId, pom.version,
-      System.currentTimeMillis, root.getAbsolutePath, 0L)
+                        System.currentTimeMillis, root.getAbsolutePath, 0L)
     entity(p)
   }
 

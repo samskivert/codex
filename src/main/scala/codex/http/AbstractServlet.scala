@@ -72,7 +72,8 @@ abstract class AbstractServlet extends HttpServlet {
   protected class ContextImpl (
     val args :Seq[String],
     val req  :HSRequest,
-    val rsp  :HSResponse) extends Context {
+    val rsp  :HSResponse
+  ) extends Context {
     lazy val body = Source.fromInputStream(req.getInputStream)(reqCodec).mkString
 
     private def reqCodec :Codec = req.getCharacterEncoding match {

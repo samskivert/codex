@@ -17,4 +17,5 @@ case class Loc (
   /** The compilation unit that contains this definition. */
   compunit :File,
   /** The character offset in `compunit` at which this definition begins. */
-  offset :Int)
+  offset :Int
+)
