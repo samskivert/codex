@@ -5,6 +5,7 @@
 package codex.extract
 
 import java.io.{File, FileReader, Reader}
+import scala.collection.mutable.{Set => MSet}
 
 import codex._
 
@@ -13,45 +14,48 @@ import codex._
   * files and extracting name and kind info. The final phase is sometimes handled by the compiler
   * infrastructure for the language in question.
   */
-abstract class Extractor {
+object Extractor {
 
   /** Recurses over the supplied project root, finding all files that match the language handled by
     * this extractor, parses the files and invokes the appropriate methods on `visitor` as it goes.
     */
   def extract (root :File, visitor :Visitor) {
-    descend(visitor)(root)
-  }
-
-  /** Processes the supplied file, informing `visitor` as we go. */
-  def process (file :File, visitor :Visitor) {
-    visitor.onCompUnit(file)
-    process(file.getName(), new FileReader(file), visitor)
-  }
-
-  /** Processes the supplied code, informing `visitor` as we go. */
-  def process (unitName :String, reader :Reader, visitor :Visitor)
-
-  /** Returns true if `file` is a source file that we can process. */
-  protected def isSource (file :File) :Boolean
-
-  /** Returns true if the directory in question should be skipped. Defaults to skipping a bunch of
-    * known version-control system directories. TODO: allow further customization. */
-  protected def isSkipDir (dir :File) = SkipDirNames(dir.getName)
-
-  private def descend (visitor :Visitor)(pdir :File) {
-    val (dirs, files) = pdir.listFiles partition(_.isDirectory)
-
-    files filter(isSource) foreach { f =>
-      val fpath = f.getCanonicalPath
-      try process(f, visitor)
-      catch {
-        case e :Throwable => log.warning("Failed to parse " + fpath + ": " +e)
-      }
+    for ((suff, fs) <- allFiles(MSet())(root) groupBy(suff) ;
+         exor <- Exors.get(suff)) {
+      println(s"Processing $suff ${fs.size}")
+      fs foreach exor.process(visitor)
     }
-
-    // TODO: ignore symlinks
-    dirs filterNot(isSkipDir) foreach descend(visitor)
   }
 
+  // TODO: allow further customization
+  private def isSkipDir (dir :File) = SkipDirNames(dir.getName)
   private val SkipDirNames = Set(".", "..", "CVS", ".svn", ".git", ".hg")
+
+  private def suff (file :File) = {
+    val name = file.getName
+    name.substring(name.lastIndexOf(".") + 1)
+  }
+
+  private def allFiles (accum :MSet[File])(pdir :File) :MSet[File] = {
+    val (dirs, files) = pdir.listFiles partition(_.isDirectory)
+    accum ++= (files map(_ getCanonicalFile) toSet)
+    dirs filterNot(isSkipDir) foreach allFiles(accum)
+    accum
+  }
+
+  private val Exors = Map(
+    "java" -> new ClikeExtractor("java"),
+    "scala" -> new ClikeExtractor("scala"),
+    "cs" -> new ClikeExtractor("cs"),
+    "as" -> new ClikeExtractor("as")
+  )
+}
+
+trait Extractor {
+  def process (visitor :Visitor)(file :File) {
+    visitor.onCompUnit(file)
+    process(visitor, file.getName, new FileReader(file))
+  }
+
+  def process (visitor :Visitor, unitName :String, reader :Reader)
 }

@@ -10,7 +10,7 @@ import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
 
 import codex._
-import codex.extract.{ClikeExtractor, Visitor}
+import codex.extract.{Extractor, Visitor}
 
 /** The source of information about a particular project. */
 class Project(
@@ -63,7 +63,7 @@ class Project(
 
     val viz = new Visitor() {
       def onCompUnit (file :File) {
-        log.info(s"Processing compunit ${file.getPath}")
+        // log.info(s"Processing compunit ${file.getPath}")
         val unitPath = file.getPath
         val path = if (unitPath.startsWith(rootPath)) unitPath.substring(rootPath.size)
         else {
@@ -72,12 +72,12 @@ class Project(
           unitPath
         }
         lastUnitId = compunits.insert(CompUnit(path)).id
-        println(s"CU $id $path")
+        // println(s"CU $id $path")
       }
       def onEnter (name :String, kind :String, offset :Int) {
         val ownerId = elemStack.headOption.getOrElse(0)
         elemStack = elements.insert(Element(ownerId, name, kind, lastUnitId, offset)).id :: elemStack
-        println(s"ELEM $name $kind ${elemStack.head} <- $ownerId")
+        // println(s"ELEM $name $kind ${elemStack.head} <- $ownerId")
       }
       def onExit (name :String) {
         elemStack = elemStack.tail
@@ -85,10 +85,7 @@ class Project(
       var lastUnitId = 0
       var elemStack = Nil :List[Int]
     }
-    // TODO: detect what kind of code this project uses and use the appropriate extractors
-    new ClikeExtractor {
-      override val lang = "java"
-    }.extract(root, viz)
+    Extractor.extract(root, viz)
 
     _lastUpdated = System.currentTimeMillis
   }

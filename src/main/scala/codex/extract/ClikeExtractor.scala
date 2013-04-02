@@ -10,12 +10,9 @@ import codex._
 
 /** A base class for very rudimentary extraction of names from C-like languages.
   * Currently supports Java, Scala, C# and ActionScript. */
-abstract class ClikeExtractor extends Extractor {
+class ClikeExtractor (lang :String) extends Extractor {
 
-  /** Customizes the behavior of this extractor based on language. */
-  val lang :String
-
-  override def process (unitName :String, reader :Reader, visitor :Visitor) {
+  override def process (visitor :Visitor, unitName :String, reader :Reader) {
     val kinds = kindsByLang(lang)
     var prevtok :String = null
     var curdef :String = null
@@ -78,9 +75,6 @@ abstract class ClikeExtractor extends Extractor {
     // if our last def had no block associated with it, we're exiting it now
     if (curdef != null) visitor.onExit(curdef)
   }
-
-  // by default, the file suffix must equal our language string ('java', 'scala', etc.)
-  override protected def isSource (file :File) = suffix(file.getName) == lang
 
   private def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
 
