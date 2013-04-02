@@ -26,48 +26,50 @@ class Projects extends Entity {
   /** Returns (creating if necessary) the project with the specified fqId. */
   def forId (fqId :FqId) :Option[Handle[Project]] = _byFqId get fqId orElse tryCreateProject(fqId)
 
+  // a backdoor to give projects easy access to their entity handle
+  private[data] def handle (fqId :FqId) = _byFqId(fqId)
+
   private def tryCreateProject (path :String) :Option[Handle[Project]] = for {
     root <- findRoot(new File(path))
     pom  <- POM.fromFile(new File(root, "pom.xml"))
-  } yield {
-    println("Ooh, POM " + pom)
-    // TODO: insert into database, resolve depends, etc. etc.
-    val p = new Project(pom.name getOrElse root.getName, pom.groupId, pom.artifactId, pom.version,
-                        System.currentTimeMillis, root.getAbsolutePath, 0L)
-    entity(p)
-  }
+  } yield createProject(root, pom)
 
   private def tryCreateProject (fqId :FqId) = None // TODO
+
+  private def createProject (root :File, pom :POM) = using(_session) {
+    val p = projects insert new Project(
+      name          = pom.name getOrElse root.getName,
+      groupId       = pom.groupId,
+      artifactId    = pom.artifactId,
+      version       = pom.version,
+      imported      = System.currentTimeMillis,
+      rootPath      = root.getAbsolutePath)
+    log.info("Created project", "fqid", p.fqId, "root", root)
+    map(p)
+  }
+
+  private def map (p :Project) = {
+    val pe = entity(p)
+    _byPath += (p.rootPath -> pe)
+    _byFqId += (p.fqId -> pe)
+    pe
+  }
 
   private val _byPath = MMap[String,Handle[Project]]()
   private val _byFqId = MMap[FqId,Handle[Project]]()
   private val _session = DB.session(codex.metaDir, "projects", ProjectsDB, 1)
-  using(_session) { projects foreach { p =>
-    val pe = entity(p)
-    _byPath += (p.rootPath -> pe)
-    _byFqId += (p.fqId -> pe)
-  }}
+
+  // map all of our existing known projects
+  using(_session) { projects foreach map }
+  // close our session on shutdown
+  shutdownSig.onEmit { _session.close }
 }
 
-/** Provides access to a SQL database that contains project data. */
+/** Provides access to a SQL database that contains projects data. */
 object ProjectsDB extends Schema {
 
-  /** A row in the depends table. */
-  case class Depend (sourceId :Long, targetId :Long) {
-    def this () = this(0L, 0L) // for unserializing
-    override def toString = s"[srcId=$sourceId, tgtId=$targetId]"
-  }
-
+  /** Contains metadata for all known projects. */
   val projects = table[Project]
-
-  val depends = table[Depend]
-  on(depends) { d => declare(
-    d.sourceId is(indexed),
-    d.targetId is(indexed)
-  )}
-
-  val dependsToProject = oneToManyRelation(projects, depends) via(_.id === _.sourceId)
-  dependsToProject.foreignKeyDeclaration.constrainReference(onDelete cascade)
 }
 
 /** Provides some static utility methods. */

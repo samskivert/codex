@@ -9,17 +9,17 @@ import codex.data.{Loc, Project, Projects}
 
 class QueryServlet extends RPCServlet {
   override def process (ctx :Context) = ctx.args match {
-    case Seq("find", defn) => findDefn(defn, ctx.body) match {
-      case Seq() => errNotFound("Definition not found")
-      case ls    => ls map format mkString("\n")
-    }
+    case Seq("find", defn) =>
+      val ls = findDefn(defn, ctx.body)
+      if (ls.isEmpty) "nomatch" // errNotFound("Definition not found")
+      else ls map format mkString("\n")
 
     case Seq("import", defn) => errInternalError("TODO")
 
     case _ => errBadRequest(s"Unknown query: ${ctx.args mkString "/"}")
   }
 
-  private def findDefn (defn :String, body :String) :Seq[Loc] = {
+  private def findDefn (defn :String, body :String) = {
     val (file, offset) = body.split("\n") match {
       case Array(file, offset) => (file, offset.toInt)
       case Array(file)         => (file, -1)
@@ -32,5 +32,5 @@ class QueryServlet extends RPCServlet {
   }
 
   // formats a location for responses
-  private def format (loc :Loc) = s"$loc.offset $loc.compunit.getAbsolutePath"
+  private def format (loc :Loc) = s"match ${loc.offset} ${loc.compunit.getAbsolutePath}"
 }

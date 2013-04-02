@@ -63,7 +63,7 @@ queried symbol. These matches can be navigated using
   (interactive (list (read-from-minibuffer "Symbol: " (thing-at-point 'symbol))))
   (let ((url-request-method "POST")
         (url-request-data (concat (buffer-file-name) "\n" (number-to-string (- (point) 1))))
-        (buffer (get-buffer-create codex-buffer-name))
+        ;; (buffer (get-buffer-create codex-buffer-name))
         )
     (setq codex-searched-sym name)
     (url-retrieve (concat codex-url "query/find/" name) 'codex-handle-query-result)
@@ -111,20 +111,25 @@ navigate to a definition or insert an import for a class."
   (setq next-error-function 'codex-next-error-function codex-error-pos nil))
 
 (defun codex-handle-query-result (status)
-  (let ((buffer (current-buffer)))
+  (let ((codex-buffer (get-buffer-create codex-buffer-name))
+        (buffer (current-buffer))
+        (bpos (search-forward "\n\n")))
     (if (eq (car status) :error)
-      (let* ((bpos (search-forward "\n\n"))
-             (body (buffer-substring bpos (point-max))))
-        (message (concat "Codex: " body)))
+        (let ((body (buffer-substring bpos (point-max))))
+          (message (concat "Codex: " body)))
       (progn
-        (setq next-error-last-buffer buffer)
-        (let ((rcount (with-current-buffer buffer
+        ;; (switch-to-buffer (current-buffer))
+        (copy-to-buffer codex-buffer bpos (point-max))
+        (kill-buffer buffer)
+        (setq next-error-last-buffer codex-buffer)
+        (let ((rcount (with-current-buffer codex-buffer
                         (codex-results-mode)
                         (goto-char 0)
                         (count-lines (point-min) (point-max))
                         )))
           (message (format "Codex found %d result(s)." rcount))
-          (codex-next-error-function 0 nil)))
+          (codex-next-error-function 0 nil))
+        )
       )
     )
   )
@@ -152,15 +157,20 @@ navigate to a definition or insert an import for a class."
             (message "End of matches (wrapped).")
             (goto-char 0))))
       ;; now process the result on the current line
-      (let ((toks (split-string (thing-at-point 'line))))
+      (let* ((line (thing-at-point 'line))
+             (toks (split-string line)))
         (cond ((string= (car toks) "nomatch")
                (message "Could not locate symbol: %s" codex-searched-sym))
               ((string= (car toks) "match")
                (ring-insert codex-marker-ring savepoint) ;; record whence we came
-               (find-file (cadr toks))
-               (goto-char (+ (string-to-number (caddr toks)) 1))
+               ;; TODO: use regex to strip off "match" and lineno, everything after that is
+               ;; the filename and may contain spaces
+               (find-file (caddr toks))
+               ;; TODO: change back to this when codex uses char offsets
+               ;; (goto-char (+ (string-to-number (cadr toks)) 1))
+               (goto-line (+ (string-to-number (cadr toks)) 1))
                )
-              (t (message (substring result 0 -1))) ;; strip newline
+              (t (message (concat "Failed to parse: " (substring line 0 -1)))) ;; strip newline
               )))))
 
 

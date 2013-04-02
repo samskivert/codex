@@ -5,8 +5,12 @@
 package codex.data
 
 import java.io.File
-import org.squeryl.KeyedEntity
+import org.squeryl.PrimitiveTypeMode._
+import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
+
+import codex._
+import codex.extract.{ClikeExtractor, Visitor}
 
 /** The source of information about a particular project. */
 class Project(
@@ -21,34 +25,145 @@ class Project(
   /** When this project was imported into the library. */
   val imported :Long,
   /** The directory at which this project is rooted, as a string. */
-  val rootPath :String,
-  // see lastUpdated for public API
-  dbLastUpdated :Long
+  val rootPath :String
 ) extends KeyedEntity[Long] with Entity {
-  def this () = this("", "", "", "", 0L, "", 0L) // for unserializing
+  import ProjectDB._
+
+  // def this () = this("", "", "", "", 0L, "") // for unserializing
 
   /** A unique identifier for this project (1 or higher). */
   val id :Long = 0L
 
   /** The directory at which this project is rooted. */
-  val root = new File(rootPath)
+  lazy val root = new File(rootPath)
 
   /** This project's fully qualified (aka Maven) id, or some approximation thereof. */
   lazy val fqId = FqId(groupId, artifactId, version)
 
-  /** When this project was last updated. */
-  def lastUpdated :Long = _lastUpdated
-
   /** Returns all definitions in this project with the specified name. */
-  def findDefn (name :String) :Seq[Loc] = {
-    println("TODO: findDefn " + this.name + " " + name)
-    // TODO: check whether project is out of date, if so queue rescan
-    // TODO: search our depends
-    // TODO: also search this project's dependencies for the defn
-    Seq()
+  def findDefn (name :String) :Iterable[Loc] = {
+    log.info("TODO: findDefn " + this.name + " " + name)
+    // if we've never been updated, do a scan now before we return results
+    if (lastUpdated == 0L) rescanProject()
+    else if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject()))
+    using(_session) {
+      for (elem <- elements where(e => e.name === name) ;
+           cu    = compunits where(cu => cu.id === elem.unitId) single)
+      yield Loc(fqId, elem.name, new File(root, cu.path), elem.offset)
+    }
+    // TODO: also search the projects on which this project depends
   }
 
-  override def toString = s"[id=$id, name=$name, vers=$version]"
+  override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
 
-  private var _lastUpdated = dbLastUpdated
+  private def rescanProject () = using(_session) {
+    // clear out our existing compunit and elements tables
+    compunits deleteWhere(_.id gt 0)
+    elements deleteWhere(_.id gt 0)
+
+    val viz = new Visitor() {
+      def onCompUnit (file :File) {
+        log.info(s"Processing compunit ${file.getPath}")
+        val unitPath = file.getPath
+        val path = if (unitPath.startsWith(rootPath)) unitPath.substring(rootPath.size)
+        else {
+          log.warning("Visiting compunit outside of project?", "proj", fqId, "root", rootPath,
+                      "path", unitPath)
+          unitPath
+        }
+        lastUnitId = compunits.insert(CompUnit(path)).id
+        println(s"CU $id $path")
+      }
+      def onEnter (name :String, kind :String, offset :Int) {
+        val ownerId = elemStack.headOption.getOrElse(0)
+        elemStack = elements.insert(Element(ownerId, name, kind, lastUnitId, offset)).id :: elemStack
+        println(s"ELEM $name $kind ${elemStack.head} <- $ownerId")
+      }
+      def onExit (name :String) {
+        elemStack = elemStack.tail
+      }
+      var lastUnitId = 0
+      var elemStack = Nil :List[Int]
+    }
+    // TODO: detect what kind of code this project uses and use the appropriate extractors
+    new ClikeExtractor {
+      override val lang = "java"
+    }.extract(root, viz)
+
+    _lastUpdated = System.currentTimeMillis
+  }
+
+  private def needsUpdate = false // TODO
+
+  private def lastUpdated = {
+    if (_lastUpdated == 0L) {
+    }
+    _lastUpdated
+  }
+  private var _lastUpdated = 0L
+
+  // defer opening of our database until we need it; thousands of project objects are created at
+  // app startup time, but not that many of them will actually get queried
+  private lazy val _session = {
+    val sess = DB.session(root, s".$artifactId", ProjectDB, 1)
+    shutdownSig onEmit { sess.close }
+    sess
+  }
+  // TODO: revamp the above to close the session after N minutes of non-use
+}
+
+/** Provides access to a SQL database that contains project data. */
+object ProjectDB extends Schema {
+
+  /** A row in the [[depends]] table. */
+  case class Depend (
+    /** The fqId of the depended upon project. */
+    fqId :String,
+    /** Whether this is a normal or testing-only dependency. */
+    forTest :Boolean
+  ) {
+    def this () = this("", false) // for unserializing
+  }
+
+  /** Tracks this project's dependencies. */
+  val depends = table[Depend]
+
+  /** A row in the [[compunits]] table. */
+  case class CompUnit (
+    /** The path to this unit (relative to project root). */
+    path :String
+  ) extends KeyedEntity[Int] {
+    def this () = this("") // for unserializing
+
+    /** A unique identifier for this unit (1 or higher). */
+    val id :Int = 0
+  }
+
+  /** Tracks this project's compilation units. */
+  val compunits = table[CompUnit]
+
+  /** A row in the [[elements]] table. */
+  case class Element (
+    /** The element that owns this element, or zero if it's top-level. */
+    ownerId :Int,
+    /** The name of this element. */
+    name :String,
+    /** The ''kind'' of this element: module, type, term, etc. */
+    kind :String,
+    /** The compunit in which this element is defined. */
+    unitId :Int,
+    /** The (character) offset in the compunit at which this element is defined. */
+    offset :Int
+  ) extends KeyedEntity[Int] {
+    def this () = this(0, "", "", 0, 0) // for unserializing
+
+    /** A unique identifier for this element (1 or higher). */
+    val id :Int = 0
+  }
+
+  /** Tracks this project's source elements. */
+  val elements = table[Element]
+  on(elements)(e => declare(
+    columns(e.ownerId, e.name, e.unitId, e.kind) are(indexed)
+  ))
 }
