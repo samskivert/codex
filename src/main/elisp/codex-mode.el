@@ -168,7 +168,8 @@ navigate to a definition or insert an import for a class."
                (find-file (caddr toks))
                ;; TODO: change back to this when codex uses char offsets
                ;; (goto-char (+ (string-to-number (cadr toks)) 1))
-               (goto-line (+ (string-to-number (cadr toks)) 1))
+               (goto-char (point-min))
+               (forward-line (1- (+ (string-to-number (cadr toks)) 1)))
                )
               (t (message (concat "Failed to parse: " (substring line 0 -1)))) ;; strip newline
               )))))
