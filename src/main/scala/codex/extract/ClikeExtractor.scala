@@ -41,7 +41,7 @@ class ClikeExtractor (lang :String) extends Extractor {
         }
 
         if (blocks.isEmpty) {
-          log.warning("Mismatched close brace", "file", unitName, "line", tok.lineno)
+          log.warning("Mismatched close brace", "file", unitName, "line", tok.lineno-1)
         } else {
           // if this block was associated with a def, tell the visitor we're exiting it
           if (blocks.head != null) visitor.onExit(blocks.head)
@@ -50,7 +50,7 @@ class ClikeExtractor (lang :String) extends Extractor {
 
       } else if (tok.ttype == StreamTokenizer.TT_WORD) {
         if (prevtok == "package" || prevtok == "namespace") {
-          visitor.onEnter(tok.sval, prevtok, tok.lineno)
+          visitor.onEnter(tok.sval, prevtok, tok.lineno-1)
           curdef = tok.sval
           // if the next token is a semicolon (or if this is Scala and the next token is not an
           // open bracket), pretend the rest of the file is one big block
@@ -65,7 +65,7 @@ class ClikeExtractor (lang :String) extends Extractor {
         } else if (kinds(prevtok)) {
           // if our previous def had no block associated with it, we're exiting it now
           if (curdef != null) visitor.onExit(curdef)
-          visitor.onEnter(tok.sval, prevtok, tok.lineno)
+          visitor.onEnter(tok.sval, prevtok, tok.lineno-1)
           curdef = tok.sval
         }
         prevtok = tok.sval
