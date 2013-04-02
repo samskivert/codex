@@ -99,10 +99,16 @@ class Project(
   }
   private var _lastUpdated = 0L
 
+  private lazy val metaDir = {
+    val dir = new File(rootPath, ".codex")
+    if (!dir.exists) dir.mkdir()
+    dir
+  }
+
   // defer opening of our database until we need it; thousands of project objects are created at
   // app startup time, but not that many of them will actually get queried
   private lazy val _session = {
-    val sess = DB.session(root, s".$artifactId", ProjectDB, 1)
+    val sess = DB.session(metaDir, "project", ProjectDB, 1)
     shutdownSig onEmit { sess.close }
     sess
   }

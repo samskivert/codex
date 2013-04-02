@@ -30,7 +30,7 @@ object DB {
                migs :(Int,String,Seq[String])*) = {
 
     // read the DB version file
-    val vfile = new File(root, name + ".codex.vers")
+    val vfile = new File(root, name + ".vers")
     val fileVers = try Source.fromFile(vfile).getLines.next.toInt
     catch {
       case e :Throwable => 0
@@ -41,7 +41,8 @@ object DB {
     }
 
     // create the database session (which will create the database, if necessary)
-    val dburl = "jdbc:h2:" + new File(root, name + ".codex").getAbsolutePath
+    val dbpath = new File(root, name).getAbsolutePath
+    val dburl = s"jdbc:h2:$dbpath;IGNORECASE=TRUE"
     val sess = Session.create(DriverManager.getConnection(dburl, "sa", ""), new H2Adapter)
     // sess.setLogger(dblogger)
 
