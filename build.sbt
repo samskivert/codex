@@ -1,5 +1,7 @@
 seq(samskivert.POMUtil.pomToSettings("pom.xml") :_*)
 
+seq(Revolver.settings :_*)
+
 crossPaths := false
 
 scalaVersion := "2.10.1"
