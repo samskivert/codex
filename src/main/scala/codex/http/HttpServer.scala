@@ -35,6 +35,8 @@ class HttpServer extends Server(config.httpPort) {
       }
     }), "/shutdown")
     ctx.addServlet(new ServletHolder(new QueryServlet), "/query/*")
+    ctx.addServlet(new ServletHolder(new ProjectsServlet), "/projects/*")
+    ctx.addServlet(new ServletHolder(new ProjectServlet), "/project/*")
     // ctx.addServlet(new ServletHolder(new DefaultServlet), "/*")
 
     // // if there's another Codex running, tell it to step aside

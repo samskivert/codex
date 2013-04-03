@@ -26,6 +26,11 @@ class Projects extends Entity {
   /** Returns (creating if necessary) the project with the specified fqId. */
   def forId (fqId :FqId) :Option[Handle[Project]] = _byFqId get fqId orElse tryCreateProject(fqId)
 
+  /** Returns (fqId, rootPath) for all known projects. */
+  def ids :Iterable[(FqId,String)] = using(_session) {
+    projects map(p => (p.fqId, p.rootPath))
+  }
+
   // a backdoor to give projects easy access to their entity handle
   private[data] def handle (fqId :FqId) = _byFqId(fqId)
 

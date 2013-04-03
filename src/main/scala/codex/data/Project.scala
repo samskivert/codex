@@ -42,8 +42,6 @@ class Project(
 
   /** Returns all definitions in this project with the specified name. */
   def findDefn (name :String) :Iterable[Loc] = {
-    log.info("TODO: findDefn " + this.name + " " + name)
-
     // if we've never been updated, do a scan now before we return results
     if (lastUpdated == 0L) rescanProject()
     else if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject()))
@@ -57,7 +55,30 @@ class Project(
     // (TODO: handle forTest, return results incrementally?)
   }
 
+  /** Used by [[visit]] to visit all comp units and elements in this project. */
+  trait Viz {
+    def onCompUnit (id :Int, path :String)
+    def onElement (id :Int, ownerId :Int, name :String, kind :String, unitId :Int, offset :Int)
+  }
+
+  /** Visits all compunits and elements in this project, in a sensible order. Each compunit is
+    * visited in turn and each top-level element in that compunit is visited, followed immediately
+    * by its children elements, and so forth (a depth-first traversal).
+    */
+  def visit (viz :Viz) {
+    val units = using(_session) { compunits.toList }
+    val elems = using(_session) { elements.toSeq groupBy(_.unitId) }
+
+    units.sortBy(_.path) foreach { u =>
+      viz.onCompUnit(u.id, u.path)
+      elems(u.id) foreach { e =>
+        viz.onElement(e.id, e.ownerId, e.name, e.kind, e.unitId, e.offset)
+      }
+    }
+  }
+
   private def findDefnLocal (name :String) = using(_session) {
+    log.info(s"seeking $name in ${this.name}")
     for (elem <- elements where(e => e.name === name) ;
          cu    = compunits where(cu => cu.id === elem.unitId) single)
     yield Loc(fqId, elem.name, new File(root, cu.path), elem.offset)

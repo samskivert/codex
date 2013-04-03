@@ -12,7 +12,7 @@ abstract class RPCServlet extends AbstractServlet {
   /** We deal in string results. */
   override type RES = String
 
-  override def writeOutput (rsp :HSResponse, result :String) = {
+  override def writeOutput (rsp :HSResponse, ctx :Context, result :String) = {
     rsp.setContentType("text/plain; charset=UTF-8")
     rsp.getOutputStream.write(result.getBytes("UTF8"))
   }

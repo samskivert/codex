@@ -37,7 +37,7 @@ abstract class AbstractServlet extends HttpServlet {
   def process (ctx :Context) :RES
 
   /** Writes the output of `process` (if any) to the servlet response. */
-  def writeOutput (rsp :HSResponse, result :RES) :Unit
+  def writeOutput (rsp :HSResponse, ctx :Context, result :RES) :Unit
 
   /** Returns true if access to this servlet is restricted to admins. Defaults to false. */
   def requireAdmin = false
@@ -57,7 +57,7 @@ abstract class AbstractServlet extends HttpServlet {
     var ctx :Context = null
     try {
       ctx = mkContext(req, rsp)
-      writeOutput(rsp, process(ctx))
+      writeOutput(rsp, ctx, process(ctx))
     } catch {
       case he :HttpException =>
         rsp.setStatus(he.code)
