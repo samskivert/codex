@@ -43,22 +43,24 @@ class Project(
   /** Returns all definitions in this project with the specified name. */
   def findDefn (name :String) :Iterable[Loc] = {
     log.info("TODO: findDefn " + this.name + " " + name)
+
     // if we've never been updated, do a scan now before we return results
     if (lastUpdated == 0L) rescanProject()
     else if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject()))
-    val selfMatches = using(_session) {
-      for (elem <- elements where(e => e.name === name) ;
-           cu    = compunits where(cu => cu.id === elem.unitId) single)
-      yield Loc(fqId, elem.name, new File(root, cu.path), elem.offset)
-    }
 
-    val depMatches = using(_session) {
+    // search this project and its transitive depends
+    findDefnLocal(name) ++ using(_session) {
       for (dep <- depends where(_.forTest === false) map(_.toFqId) ;
            deph <- projects request(_.forId(dep)) toSeq ;
-           loc <- deph request(_.findDefn(name))) yield loc
+           loc <- deph request(_.findDefnLocal(name))) yield loc
     }
+    // (TODO: handle forTest, return results incrementally?)
+  }
 
-    selfMatches ++ depMatches
+  private def findDefnLocal (name :String) = using(_session) {
+    for (elem <- elements where(e => e.name === name) ;
+         cu    = compunits where(cu => cu.id === elem.unitId) single)
+    yield Loc(fqId, elem.name, new File(root, cu.path), elem.offset)
   }
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
@@ -74,8 +76,9 @@ class Project(
 
     def toDep (forTest :Boolean)(fqId :FqId) =
       Depend(fqId.groupId, fqId.artifactId, fqId.version, forTest)
-    model.depends map(toDep(false)) foreach depends.insert
-    model.testDepends map(toDep(true)) foreach depends.insert
+    val (deps, testDeps) = model.depends
+    deps map(toDep(false)) foreach depends.insert
+    testDeps map(toDep(true)) foreach depends.insert
 
     val sourceDir = model.sourceDir
     if (sourceDir.exists) {
@@ -91,7 +94,8 @@ class Project(
         }
         def onEnter (name :String, kind :String, offset :Int) {
           val ownerId = elemStack.headOption.getOrElse(0)
-          elemStack = elements.insert(Element(ownerId, name, kind, lastUnitId, offset)).id :: elemStack
+          val elem = Element(ownerId, name, kind, lastUnitId, offset)
+          elemStack = elements.insert(elem).id :: elemStack
         }
         def onExit (name :String) {
           elemStack = elemStack.tail

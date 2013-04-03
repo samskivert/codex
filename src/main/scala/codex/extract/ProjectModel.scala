@@ -18,12 +18,8 @@ abstract class ProjectModel (root :File) {
   /** Returns the directory that contains this project's test source code. */
   def testSourceDir :File
 
-  /** Returns the projects on which this project depends. */
-  def depends :Seq[FqId]
-
-  /** Returns the projects on which this project's test code depends (these are in addition to the
-    * main [[depends]]). */
-  def testDepends :Seq[FqId]
+  /** Returns this project's `(compile, test)` dependencies. */
+  def depends :(Seq[FqId],Seq[FqId])
 
   /** Creates a file, relative to the project root, with the supplied path components. */
   protected def file (comps :String*) = (root /: comps)(new File(_, _))
@@ -50,30 +46,32 @@ object ProjectModel {
       val options = Seq(file("src", "main"), file("src"))
       options find(_.isDirectory) getOrElse(root)
     }
-    override def testSourceDir :File = {
+    override def testSourceDir = {
       val options = Seq(file("test"), file("src", "test"), file("tests"), file("src", "tests"))
       options find(_.isDirectory) getOrElse(root)
     }
-    override def depends :Seq[FqId] = Seq() // no idea!
-    override def testDepends :Seq[FqId] = Seq() // no idea!
+    override def depends = (Seq(), Seq()) // no idea!
   }
 
-  class MavenProjectModel (root :File, pfile :File) extends ProjectModel(root) {
-    val pom = POM.fromFile(pfile).get
-    override def sourceDir = file("src", "main") // TODO: read from POM
-    override def testSourceDir = file("src", "test") // TODO: read from POM
-    override def depends = pom.depends.filter(_.scope != "test") map(toFqId)
-    override def testDepends = pom.depends.filter(_.scope == "test") map(toFqId)
+  abstract class POMProjectModel (root :File) extends ProjectModel(root) {
+    val pom :POM
+    override def depends = {
+      val (deps, testDeps) = pom.transitiveDepends(true) partition(_.scope != "test")
+      (deps map toFqId, testDeps map toFqId)
+    }
     private def toFqId (dep :Dependency) = FqId(dep.groupId, dep.artifactId, dep.version)
   }
 
-  class M2ProjectModel (fqId :FqId, root :File, pfile :File) extends ProjectModel(root) {
+  class MavenProjectModel (root :File, pfile :File) extends POMProjectModel(root) {
+    val pom = POM.fromFile(pfile).get
+    override def sourceDir = file("src", "main") // TODO: read from POM
+    override def testSourceDir = file("src", "test") // TODO: read from POM
+  }
+
+  class M2ProjectModel (fqId :FqId, root :File, pfile :File) extends POMProjectModel(root) {
     val pom = POM.fromFile(pfile).get
     // TODO: download sources if jar doesn't exist
     override def sourceDir = new File(root, pfile.getName.replaceAll(".pom", "-sources.jar"))
     override def testSourceDir = root
-    override def depends = pom.depends.filter(_.scope != "test") map(toFqId)
-    override def testDepends = pom.depends.filter(_.scope == "test") map(toFqId)
-    private def toFqId (dep :Dependency) = FqId(dep.groupId, dep.artifactId, dep.version)
   }
 }
