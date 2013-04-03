@@ -165,15 +165,28 @@ navigate to a definition or insert an import for a class."
                (ring-insert codex-marker-ring savepoint) ;; record whence we came
                ;; TODO: use regex to strip off "match" and lineno, everything after that is
                ;; the filename and may contain spaces
-               (find-file (caddr toks))
-               ;; TODO: change back to this when codex uses char offsets
-               ;; (goto-char (+ (string-to-number (cadr toks)) 1))
-               (goto-char (point-min))
-               (forward-line (1- (+ (string-to-number (cadr toks)) 1)))
+               (codex-visit-file (caddr toks) (string-to-number (cadr toks)))
                )
               (t (message (concat "Failed to parse: " (substring line 0 -1)))) ;; strip newline
               )))))
 
+(defun codex-visit-file (path pos)
+  ;; if the path is of the form file!path then we need to do some special handling to navigate into
+  ;; an archive file and open the path in question
+  (let* ((comps (split-string path "!"))
+         (clen (length comps)))
+    (cond ((eq clen 1)
+           (find-file path))
+          (t
+           (find-file (car comps))
+           (search-forward (cadr comps))
+           (archive-extract))))
+  ;; now we move to the line in question
+  (goto-char (point-min))
+  (forward-line (1- (+ pos 1)))
+  ;; TODO: change back to this when codex uses char offsets
+  ;; (goto-char (+ pos 1))
+  )
 
 (provide 'codex-mode)
 ;;; codex.el ends here
