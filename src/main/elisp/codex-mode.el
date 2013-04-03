@@ -26,6 +26,7 @@
 ;;; Code:
 
 (require 'url)
+(require 'cl)
 
 (defvar codex-url "http://localhost:3003/"
   "The URL via which we communicate with Codex.")
