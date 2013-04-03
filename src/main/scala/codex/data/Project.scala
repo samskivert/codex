@@ -10,7 +10,7 @@ import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
 
 import codex._
-import codex.extract.{Extractor, Visitor}
+import codex.extract.{Extractor, ProjectModel, Visitor}
 
 /** The source of information about a particular project. */
 class Project(
@@ -46,46 +46,66 @@ class Project(
     // if we've never been updated, do a scan now before we return results
     if (lastUpdated == 0L) rescanProject()
     else if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject()))
-    using(_session) {
+    val selfMatches = using(_session) {
       for (elem <- elements where(e => e.name === name) ;
            cu    = compunits where(cu => cu.id === elem.unitId) single)
       yield Loc(fqId, elem.name, new File(root, cu.path), elem.offset)
     }
-    // TODO: also search the projects on which this project depends
+
+    val depMatches = using(_session) {
+      for (dep <- depends where(_.forTest === false) map(_.toFqId) ;
+           deph <- projects request(_.forId(dep)) toSeq ;
+           loc <- deph request(_.findDefn(name))) yield loc
+    }
+
+    selfMatches ++ depMatches
   }
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
 
   private def rescanProject () = using(_session) {
+    log.info(s"Rescanning $fqId")
     // clear out our existing compunit and elements tables
+    depends deleteWhere(d => not (d.groupId === ""))
     compunits deleteWhere(_.id gt 0)
     elements deleteWhere(_.id gt 0)
 
-    val viz = new Visitor() {
-      def onCompUnit (file :File) {
-        // log.info(s"Processing compunit ${file.getPath}")
-        val unitPath = file.getPath
-        val path = if (unitPath.startsWith(rootPath)) unitPath.substring(rootPath.size)
-        else {
-          log.warning("Visiting compunit outside of project?", "proj", fqId, "root", rootPath,
-                      "path", unitPath)
-          unitPath
+    val model = ProjectModel.infer(fqId, root)
+
+    def toDep (forTest :Boolean)(fqId :FqId) =
+      Depend(fqId.groupId, fqId.artifactId, fqId.version, forTest)
+    model.depends map(toDep(false)) foreach depends.insert
+    model.testDepends map(toDep(true)) foreach depends.insert
+
+    val sourceDir = model.sourceDir
+    if (sourceDir.exists) {
+      val viz = new Visitor() {
+        def onCompUnit (unitPath :String) {
+          val path = if (unitPath.startsWith(rootPath)) unitPath.substring(rootPath.size)
+          else {
+            log.warning("Visiting compunit outside of project?", "proj", fqId, "root", rootPath,
+                        "path", unitPath)
+            unitPath
+          }
+          lastUnitId = compunits.insert(CompUnit(path)).id
         }
-        lastUnitId = compunits.insert(CompUnit(path)).id
-        // println(s"CU $id $path")
+        def onEnter (name :String, kind :String, offset :Int) {
+          val ownerId = elemStack.headOption.getOrElse(0)
+          elemStack = elements.insert(Element(ownerId, name, kind, lastUnitId, offset)).id :: elemStack
+        }
+        def onExit (name :String) {
+          elemStack = elemStack.tail
+        }
+        var lastUnitId = 0
+        var elemStack = Nil :List[Int]
       }
-      def onEnter (name :String, kind :String, offset :Int) {
-        val ownerId = elemStack.headOption.getOrElse(0)
-        elemStack = elements.insert(Element(ownerId, name, kind, lastUnitId, offset)).id :: elemStack
-        // println(s"ELEM $name $kind ${elemStack.head} <- $ownerId")
-      }
-      def onExit (name :String) {
-        elemStack = elemStack.tail
-      }
-      var lastUnitId = 0
-      var elemStack = Nil :List[Int]
+      Extractor.extract(sourceDir, viz)
+      // TODO: extract elements from test source (mark them as such)
+
+    } else {
+      log.info(s"No source for ${fqId}. Skipping...")
+      // TODO: try downloading source from Maven Central (in background?)
     }
-    Extractor.extract(root, viz)
 
     _lastUpdated = System.currentTimeMillis
   }
@@ -120,12 +140,18 @@ object ProjectDB extends Schema {
 
   /** A row in the [[depends]] table. */
   case class Depend (
-    /** The fqId of the depended upon project. */
-    fqId :String,
+    /** The groupId of the depended upon project. */
+    groupId :String,
+    /** The artifactId of the depended upon project. */
+    artifactId :String,
+    /** The version of the depended upon project. */
+    version :String,
     /** Whether this is a normal or testing-only dependency. */
     forTest :Boolean
   ) {
-    def this () = this("", false) // for unserializing
+    def this () = this("", "", "", false) // for unserializing
+
+    def toFqId = FqId(groupId, artifactId, version)
   }
 
   /** Tracks this project's dependencies. */

@@ -4,17 +4,14 @@
 
 package codex.extract
 
-import java.io.{File, StringReader}
 import org.junit.Assert._
 import org.junit._
-import scala.collection.mutable.ArrayBuffer
 
 class ClikeTest {
+  import ExtractorTest._
 
   @Test def testSomeJava {
-    val out = test(new ClikeExtractor {
-      override val lang = "java"
-    }, """
+    val out = test(new ClikeExtractor("java"), """
 package com.test
 
 public class Foo {
@@ -30,21 +27,20 @@ public class Foo {
 }
 """)
     assertEquals("""
-ENTER package com.test 2
+CU test
+ENTER package com.test 1
 EXIT com.test
-ENTER class Foo 4
- ENTER class Bar 5
+ENTER class Foo 3
+ ENTER class Bar 4
  EXIT Bar
- ENTER interface Bippy 9
+ ENTER interface Bippy 8
  EXIT Bippy
 EXIT Foo
 """.substring(1), out)
   }
 
   @Test def testSomeScala {
-    val out = test(new ClikeExtractor {
-      override val lang = "scala"
-    }, """
+    val out = test(new ClikeExtractor("scala"), """
 package com.test
 
 object Foo {
@@ -65,45 +61,28 @@ object Foo {
 def outer (thing :Bippy) = ...
 """)
     assertEquals("""
-ENTER package com.test 2
- ENTER object Foo 4
-  ENTER class Bar 5
-   ENTER def baz 6
+CU test
+ENTER package com.test 1
+ ENTER object Foo 3
+  ENTER class Bar 4
+   ENTER def baz 5
    EXIT baz
   EXIT Bar
-  ENTER trait Bippy 9
-   ENTER def bangle 10
+  ENTER trait Bippy 8
+   ENTER def bangle 9
    EXIT bangle
   EXIT Bippy
-  ENTER def fiddle 12
+  ENTER def fiddle 11
   EXIT fiddle
-  ENTER def faddle 13
-   ENTER def nested1 14
+  ENTER def faddle 12
+   ENTER def nested1 13
    EXIT nested1
-   ENTER def nested2 15
+   ENTER def nested2 14
    EXIT nested2
   EXIT faddle
  EXIT Foo
- ENTER def outer 19
+ ENTER def outer 18
  EXIT outer
 """.substring(1), out)
-  }
-
-  private def test (ex :Extractor, code :String) = {
-    val buf = new StringBuilder
-    ex.process("test", new StringReader(code), new Visitor {
-      def onCompUnit (path :File) = dump("CU $path")
-      def onEnter (name :String, kind :String, offset :Int) {
-        dump(s"ENTER $kind $name $offset")
-        indent += 1
-      }
-      def onExit (name :String) {
-        indent -= 1
-        dump(s"EXIT $name")
-      }
-      private def dump (msg :String) = buf.append(" " * indent).append(msg).append("\n")
-      private var indent = 0
-    })
-    buf.toString
   }
 }

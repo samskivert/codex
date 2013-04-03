@@ -38,7 +38,7 @@ import java.io.File
 trait Visitor {
 
   /** Called when a compilation unit is about to be processed. */
-  def onCompUnit (file :File)
+  def onCompUnit (path :String)
 
   /** Called when we enter the ''scope'' of a new element. */
   def onEnter (name :String, kind :String, offset :Int)

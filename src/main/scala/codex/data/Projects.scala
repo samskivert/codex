@@ -34,7 +34,15 @@ class Projects extends Entity {
     pom  <- POM.fromFile(new File(root, "pom.xml"))
   } yield createProject(root, pom)
 
-  private def tryCreateProject (fqId :FqId) = None // TODO
+  private def tryCreateProject (fqId :FqId) = {
+    // TODO: support other file types?
+    val home = new File(System.getProperty("user.home"))
+    val m2path = Seq(".m2", "repository") ++ fqId.groupId.split("\\.") ++ Seq(
+      fqId.artifactId, fqId.version, s"${fqId.artifactId}-${fqId.version}.pom")
+    val m2file = (home /: m2path)(new File(_, _))
+    if (m2file.exists) POM.fromFile(m2file) map(createProject(m2file.getParentFile, _))
+    else None
+  }
 
   private def createProject (root :File, pom :POM) = using(_session) {
     val p = projects insert new Project(
