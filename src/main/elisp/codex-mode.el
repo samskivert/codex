@@ -234,8 +234,12 @@ navigate to a definition or insert an import for a class."
            (find-file path))
           (t
            (find-file (car comps))
-           (search-forward (cadr comps))
-           (archive-extract))))
+           (let ((zipbuf (current-buffer)))
+             (goto-char 0)
+             (search-forward (cadr comps))
+             (archive-extract)
+             (kill-buffer zipbuf)
+             ))))
   ;; now we move to the line in question
   (goto-char (point-min))
   (forward-line (1- (+ pos 1)))
