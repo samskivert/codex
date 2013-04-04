@@ -10,8 +10,8 @@ import java.io.File
 case class Loc (
   /** The id of the project that contains this definition. */
   projId :FqId,
-  // /** The module that contains this definition (everything up to the last dot). */
-  // module :String,
+  /** The element id of the definition. */
+  elemId :Int,
   /** The simple name of the definition. */
   name :String,
   /** The compilation unit that contains this definition. */

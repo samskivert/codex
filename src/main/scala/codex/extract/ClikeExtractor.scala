@@ -11,6 +11,7 @@ import codex._
 /** A base class for very rudimentary extraction of names from C-like languages.
   * Currently supports Java, Scala, C# and ActionScript. */
 class ClikeExtractor (lang :String) extends Extractor {
+  import Clike._
 
   override def process (visitor :Visitor, unitName :String, reader :Reader) {
     visitor.onCompUnit(unitName)
@@ -79,19 +80,4 @@ class ClikeExtractor (lang :String) extends Extractor {
   }
 
   private def suffix (name :String) = name.substring(name.lastIndexOf(".")+1)
-
-  private def toker (reader :Reader) = {
-    val tok = new StreamTokenizer(new BufferedReader(reader))
-    tok.ordinaryChar('/') // why do they call this a comment char by default?
-    tok.wordChars('_', '_') // allow _ in class names
-    tok.slashSlashComments(true)
-    tok.slashStarComments(true)
-    tok
-  }
-
-  /** Tokens that will appear prior to an element declaration, by language. */
-  private val kindsByLang = Map("java"  -> Set("class", "enum", "interface", "@interface"),
-                                "scala" -> Set("class", "object", "trait", "def"),
-                                "as"    -> Set("class", "interface"),
-                                "cs"    -> Set("class", "enum", "interface", "struct"))
 }

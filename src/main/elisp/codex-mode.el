@@ -40,6 +40,7 @@
 ;; Used when querying Codex and processing the results
 (defvar codex-buffer-name "*codex*")
 (defvar codex-searched-sym nil)
+(defvar url-http-end-of-headers)
 
 (defun codex-browse-url (url)
   "The function called by the Codex bindings to display a URL.
@@ -64,11 +65,63 @@ queried symbol. These matches can be navigated using
   (interactive (list (read-from-minibuffer "Symbol: " (thing-at-point 'symbol))))
   (let ((url-request-method "POST")
         (url-request-data (concat (buffer-file-name) "\n" (number-to-string (- (point) 1))))
-        ;; (buffer (get-buffer-create codex-buffer-name))
         )
     (setq codex-searched-sym name)
-    (url-retrieve (concat codex-url "query/find/" name) 'codex-handle-query-result)
+    (url-retrieve (concat codex-url "query/find/" name) 'codex-handle-find-result)
     ))
+
+(defun codex-import-symbol (class &optional arg)
+  "Locates the class identified by the symbol under the point and
+inserts an import statement for that class in the appropriate
+position. For Java-like languages."
+  (interactive (list (read-from-minibuffer "Class: " (thing-at-point 'symbol))))
+  ;; save the current buffer (if needed) because Codex will read the file from the file-system to
+  ;; determine where to insert the import
+  (if (buffer-modified-p) (save-buffer))
+  (let* ((term (if (string= mode-name "Scala") "" ";"))
+         (spoint (point)) ;; save the point
+         (url-request-method "POST")
+         (url-request-data (concat (buffer-file-name) "\n" (number-to-string (- (point) 1))))
+         (query-url (concat codex-url "query/import/" class))
+         (resline (with-current-buffer (url-retrieve-synchronously query-url)
+                    (goto-char url-http-end-of-headers)
+                    (forward-line)
+                    (thing-at-point 'line)))
+         (result (split-string resline)))
+    (cond ((string= (car result) "nomatch")
+           (message (format "No match for class: %s" class)))
+          ((string= (car result) "notneeded")
+           (message (format "%s is already imported." class)))
+          ((string= (car result) "match")
+           (let ((mclass (cadr result))
+                 (mline (caddr result))
+                 (mblank (cadddr result))
+                 (madjust 0) (mneedadjust nil))
+             ;; go to our insertion line
+             (goto-line (string-to-number mline))
+             (setq mneedadjust (<= (point) spoint))
+             ;; insert the import statment and any necessary blank lines
+             (if (string= mblank "preblank")
+                 (progn
+                   (insert "\n")
+                   (setq madjust (1+ madjust))))
+             (insert (concat "import " mclass term "\n"))
+             (setq madjust (+ madjust (length mclass)))
+             (setq madjust (+ madjust 8)) ; 'import \n'
+             (setq madjust (+ madjust (length term))) ; optional semicolon
+             (if (string= mblank "postblank")
+                 (progn
+                   (insert "\n")
+                   (setq madjust (1+ madjust))))
+             ;; finally adjust the point (if necessary) and restore it
+             (if mneedadjust (setq spoint (+ spoint madjust)))
+             (goto-char spoint)
+             (message (format "Imported: %s" mclass))
+             ))
+          (t (message (format "Unknown respose: %s" resline)))
+          )
+    )
+  )
 
 (defun pop-codex-mark ()
   "Pop back to where \\[codex-open-symbol] was last invoked."
@@ -98,6 +151,7 @@ navigate to a definition or insert an import for a class."
   ;; The minor mode bindings.
   :keymap '(("\C-c\C-j" . codex-doc-symbol)
             ("\C-c\C-k" . codex-open-symbol)
+            ("\C-c\C-i" . codex-import-symbol)
             ("\M-."     . codex-open-symbol)
             ("\M-/"     . pop-codex-mark)
             ("\M-]"     . next-error)
@@ -111,7 +165,7 @@ navigate to a definition or insert an import for a class."
   "Major mode for Codex search results."
   (setq next-error-function 'codex-next-error-function codex-error-pos nil))
 
-(defun codex-handle-query-result (status)
+(defun codex-handle-find-result (status)
   (let ((codex-buffer (get-buffer-create codex-buffer-name))
         (buffer (current-buffer))
         (bpos (search-forward "\n\n")))

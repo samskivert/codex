@@ -22,6 +22,8 @@ class Project(
   val artifactId :String,
   /** The version string for this project. */
   val version :String,
+  /** This project's flavor (related to build system, e.g. m2, ivy, maven, sbt, etc.). */
+  val flavor :String,
   /** When this project was imported into the library. */
   val imported :Long,
   /** The directory at which this project is rooted, as a string. */
@@ -48,11 +50,27 @@ class Project(
 
     // search this project and its transitive depends
     findDefnLocal(name) ++ using(_session) {
-      for (dep <- depends where(_.forTest === false) map(_.toFqId) ;
-           deph <- projects request(_.forId(dep)) toSeq ;
+      for (dep <- dependsT where(_.forTest === false) ;
+           deph <- projects request(_.forDep(dep)) toSeq ;
            loc <- deph request(_.findDefnLocal(name))) yield loc
     }
     // (TODO: handle forTest, return results incrementally?)
+  }
+
+  /** Returns the fully qualified name of the supplied element.
+    * TODO: currently assumes Java-like element separator (.).
+    */
+  def qualify (elemId :Int) :String = using(_session) {
+    var curId = elemId
+    val buf = new StringBuilder
+    while (curId != 0) {
+      val elem = elementsT.lookup(curId).get
+      println(elem)
+      if (buf.length > 0) buf.insert(0, ".")
+      buf.insert(0, elem.name)
+      curId = elem.ownerId
+    }
+    buf.toString
   }
 
   /** Used by [[visit]] to visit all comp units and elements in this project. */
@@ -66,8 +84,8 @@ class Project(
     * by its children elements, and so forth (a depth-first traversal).
     */
   def visit (viz :Viz) {
-    val units = using(_session) { compunits.toList }
-    val elems = using(_session) { elements.toSeq groupBy(_.unitId) }
+    val units = using(_session) { compunitsT.toList }
+    val elems = using(_session) { elementsT.toSeq groupBy(_.unitId) }
 
     units.sortBy(_.path) foreach { u =>
       viz.onCompUnit(u.id, u.path)
@@ -77,11 +95,14 @@ class Project(
     }
   }
 
+  /** Returns this project's complete transitive dependency set. */
+  def depends :Seq[Depend] = using(_session) { dependsT.toSeq }
+
   private def findDefnLocal (name :String) = using(_session) {
     log.info(s"seeking $name in ${this.name}")
-    for (elem <- elements where(e => e.name === name) ;
-         cu    = compunits where(cu => cu.id === elem.unitId) single)
-    yield Loc(fqId, elem.name, new File(root, cu.path), elem.offset)
+    for (elem <- elementsT where(e => e.name === name) ;
+         cu    = compunitsT where(cu => cu.id === elem.unitId) single)
+    yield Loc(fqId, elem.id, elem.name, new File(root, cu.path), elem.offset)
   }
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
@@ -89,34 +110,29 @@ class Project(
   private def rescanProject () = using(_session) {
     log.info(s"Rescanning $fqId")
     // clear out our existing compunit and elements tables
-    depends deleteWhere(d => not (d.groupId === ""))
-    compunits deleteWhere(_.id gt 0)
-    elements deleteWhere(_.id gt 0)
+    dependsT deleteWhere(d => not (d.groupId === ""))
+    compunitsT deleteWhere(_.id gt 0)
+    elementsT deleteWhere(_.id gt 0)
 
-    val model = ProjectModel.infer(fqId, root)
+    // depends are easy, jam 'em in!
+    _model.depends foreach dependsT.insert
 
-    def toDep (forTest :Boolean)(fqId :FqId) =
-      Depend(fqId.groupId, fqId.artifactId, fqId.version, forTest)
-    val (deps, testDeps) = model.depends
-    deps map(toDep(false)) foreach depends.insert
-    testDeps map(toDep(true)) foreach depends.insert
-
-    val sourceDir = model.sourceDir
+    val sourceDir = _model.sourceDir
     if (sourceDir.exists) {
       val viz = new Visitor() {
         def onCompUnit (unitPath :String) {
-          val path = if (unitPath.startsWith(rootPath)) unitPath.substring(rootPath.size)
-          else {
-            log.warning("Visiting compunit outside of project?", "proj", fqId, "root", rootPath,
-                        "path", unitPath)
-            unitPath
+          val path = unitPath.startsWith(rootPath) match {
+            case true  => unitPath.substring(rootPath.size)
+            case false => log.warning("Visiting compunit outside of project?", "proj", fqId,
+                                      "root", rootPath, "path", unitPath) ; unitPath
           }
-          lastUnitId = compunits.insert(CompUnit(path)).id
+          lastUnitId = compunitsT.insert(CompUnit(path)).id
+          elemStack = Nil
         }
         def onEnter (name :String, kind :String, offset :Int) {
           val ownerId = elemStack.headOption.getOrElse(0)
           val elem = Element(ownerId, name, kind, lastUnitId, offset)
-          elemStack = elements.insert(elem).id :: elemStack
+          elemStack = elementsT.insert(elem).id :: elemStack
         }
         def onExit (name :String) {
           elemStack = elemStack.tail
@@ -144,7 +160,9 @@ class Project(
   }
   private var _lastUpdated = 0L
 
-  private lazy val metaDir = {
+  private lazy val _model = ProjectModel.forProject(flavor, fqId, root)
+
+  private lazy val _metaDir = {
     val dir = new File(rootPath, ".codex")
     if (!dir.exists) dir.mkdir()
     dir
@@ -153,7 +171,7 @@ class Project(
   // defer opening of our database until we need it; thousands of project objects are created at
   // app startup time, but not that many of them will actually get queried
   private lazy val _session = {
-    val sess = DB.session(metaDir, "project", ProjectDB, 1)
+    val sess = DB.session(_metaDir, "project", ProjectDB, 1)
     shutdownSig onEmit { sess.close }
     sess
   }
@@ -163,24 +181,8 @@ class Project(
 /** Provides access to a SQL database that contains project data. */
 object ProjectDB extends Schema {
 
-  /** A row in the [[depends]] table. */
-  case class Depend (
-    /** The groupId of the depended upon project. */
-    groupId :String,
-    /** The artifactId of the depended upon project. */
-    artifactId :String,
-    /** The version of the depended upon project. */
-    version :String,
-    /** Whether this is a normal or testing-only dependency. */
-    forTest :Boolean
-  ) {
-    def this () = this("", "", "", false) // for unserializing
-
-    def toFqId = FqId(groupId, artifactId, version)
-  }
-
   /** Tracks this project's dependencies. */
-  val depends = table[Depend]
+  val dependsT = table[Depend]
 
   /** A row in the [[compunits]] table. */
   case class CompUnit (
@@ -191,10 +193,12 @@ object ProjectDB extends Schema {
 
     /** A unique identifier for this unit (1 or higher). */
     val id :Int = 0
+
+    override def toString = s"$id:$path"
   }
 
   /** Tracks this project's compilation units. */
-  val compunits = table[CompUnit]
+  val compunitsT = table[CompUnit]
 
   /** A row in the [[elements]] table. */
   case class Element (
@@ -213,11 +217,13 @@ object ProjectDB extends Schema {
 
     /** A unique identifier for this element (1 or higher). */
     val id :Int = 0
+
+    override def toString = s"$name ($id, $ownerId, $kind, $unitId, $offset)"
   }
 
   /** Tracks this project's source elements. */
-  val elements = table[Element]
-  on(elements)(e => declare(
+  val elementsT = table[Element]
+  on(elementsT)(e => declare(
     columns(e.ownerId, e.name, e.unitId, e.kind) are(indexed)
   ))
 }

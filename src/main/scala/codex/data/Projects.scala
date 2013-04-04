@@ -7,11 +7,11 @@ package codex.data
 import java.io.File
 import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.{KeyedEntity, Schema}
-import pomutil.POM
 import samscala.nexus.{Entity, Handle, entity}
 import scala.collection.mutable.{Map => MMap}
 
 import codex._
+import codex.extract.ProjectModel
 
 /** Provides project-related services. */
 class Projects extends Entity {
@@ -21,10 +21,14 @@ class Projects extends Entity {
   /** Returns (creating if necessary) the project that contains the supplied comp unit. */
   def forPath (path :String) :Option[Handle[Project]] = _byPath collectFirst {
     case (root, p) if (path startsWith root) => p
-  } orElse tryCreateProject(path)
+  } orElse (findRoot(new File(path)) flatMap ProjectModel.forRoot map createProject)
 
-  /** Returns (creating if necessary) the project with the specified fqId. */
-  def forId (fqId :FqId) :Option[Handle[Project]] = _byFqId get fqId orElse tryCreateProject(fqId)
+  /** Returns (creating if necessary) the project for the specified dependency. */
+  def forDep (depend :Depend) :Option[Handle[Project]] =
+    (_byFqId get depend.toFqId) orElse (ProjectModel.forDepend(depend) map createProject)
+
+  /** Returns the project for the supplied fqId or `None` if no such project is known. */
+  def forId (fqId :FqId) :Option[Handle[Project]] = _byFqId get fqId
 
   /** Returns (fqId, rootPath) for all known projects. */
   def ids :Iterable[(FqId,String)] = using(_session) {
@@ -34,30 +38,16 @@ class Projects extends Entity {
   // a backdoor to give projects easy access to their entity handle
   private[data] def handle (fqId :FqId) = _byFqId(fqId)
 
-  private def tryCreateProject (path :String) :Option[Handle[Project]] = for {
-    root <- findRoot(new File(path))
-    pom  <- POM.fromFile(new File(root, "pom.xml"))
-  } yield createProject(root, pom)
-
-  private def tryCreateProject (fqId :FqId) = {
-    // TODO: support other file types?
-    val home = new File(System.getProperty("user.home"))
-    val m2path = Seq(".m2", "repository") ++ fqId.groupId.split("\\.") ++ Seq(
-      fqId.artifactId, fqId.version, s"${fqId.artifactId}-${fqId.version}.pom")
-    val m2file = (home /: m2path)(new File(_, _))
-    if (m2file.exists) POM.fromFile(m2file) map(createProject(m2file.getParentFile, _))
-    else None
-  }
-
-  private def createProject (root :File, pom :POM) = using(_session) {
+  private def createProject (pm :ProjectModel) = using(_session) {
     val p = projects insert new Project(
-      name          = pom.name getOrElse root.getName,
-      groupId       = pom.groupId,
-      artifactId    = pom.artifactId,
-      version       = pom.version,
+      name          = pm.name,
+      groupId       = pm.groupId,
+      artifactId    = pm.artifactId,
+      version       = pm.version,
+      flavor        = pm.flavor,
       imported      = System.currentTimeMillis,
-      rootPath      = root.getAbsolutePath)
-    log.info("Created project", "fqid", p.fqId, "root", root)
+      rootPath      = pm.root.getAbsolutePath)
+    log.info("Created project", "fqid", p.fqId, "root", pm.root)
     map(p)
   }
 
