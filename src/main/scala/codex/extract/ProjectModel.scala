@@ -4,7 +4,9 @@
 
 package codex.extract
 
-import java.io.File
+import java.io.{File, FileOutputStream}
+import java.net.{HttpURLConnection, URL}
+import java.nio.channels.Channels
 import pomutil.{POM, Dependency}
 
 import codex._
@@ -21,6 +23,10 @@ abstract class ProjectModel (
   /** `true` if the project rooted at `root` is a valid project for our flavor. */
   def isValid :Boolean
 
+  /** `true` if this is a remote project (e.g. its data comes from .m2 or .ivy or similar).
+    * `false` if this is a local project (we have the source checked out locally). */
+  def isRemote :Boolean
+
   /** Methods to infer/extract various bits of project metadata. */
   def name :String
   def groupId :String
@@ -31,6 +37,15 @@ abstract class ProjectModel (
 
   /** Extracts this project's transitive dependencies. */
   def depends :Seq[Depend]
+
+  /** Attempts to download the source code for this project (only meaningful if [[isRemote]]). */
+  def tryDownloadSource () {}
+
+  /** `true` if this project appears to have documentation in the expected place. */
+  def hasDocs = false
+
+  /** Attempts to download or generate the documentation for this project. */
+  def tryGenerateDocs () {}
 
   /** Creates a file, relative to the project root, with the supplied path components. */
   protected def file (comps :String*) = ProjectModel.file(root, comps :_*)
@@ -59,10 +74,12 @@ object ProjectModel {
   class DefaultProjectModel (root :File) extends ProjectModel(root) {
     override val flavor = "unknown"
     override def isValid = root.isDirectory // we're not picky!
+    override def isRemote = false
     override def name = root.getName
     override def groupId = "unknown"
     override def artifactId = root.getName
     override def version = "unknown"
+
     override def sourceDir = {
       val options = Seq(file("src", "main"), file("src"))
       options find(_.isDirectory) getOrElse(root)
@@ -89,10 +106,14 @@ object ProjectModel {
   class MavenProjectModel (root :File) extends POMProjectModel(root) {
     override val flavor = "maven"
     override def isValid = pfile.exists
+    override def isRemote = false
     override def sourceDir = file("src", "main") // TODO: read from POM
     override def testSourceDir = file("src", "test") // TODO: read from POM
 
-    val pfile = new File(root, "pom.xml")
+    override def hasDocs = file("target", "site", "apidocs").exists
+    override def tryGenerateDocs () = Maven.buildDocs(root)
+
+    val pfile = file("pom.xml")
     override def pom = _pom
     lazy val _pom = POM.fromFile(pfile).get
   }
@@ -100,28 +121,54 @@ object ProjectModel {
   class M2ProjectModel (root :File, fqId :FqId) extends POMProjectModel(root) {
     override val flavor = "m2"
     override def isValid = pfile.exists
-    // TODO: download sources if jar doesn't exist
-    override def sourceDir = new File(root, pfile.getName.replaceAll(".pom", "-sources.jar"))
+    override def isRemote = true
+    override def sourceDir = artifact("sources")
     override def testSourceDir = root
 
-    val pfile = new File(root, s"${fqId.artifactId}-${fqId.version}.pom")
+    override def tryDownloadSource () = tryDownload("sources")
+    override def hasDocs = artifact("docs").exists
+    override def tryGenerateDocs () = tryDownload("docs")
+
+    private def artifact (cfier :String) =
+      file(pfile.getName.replaceAll(".pom", s"-$cfier.jar"))
+
+    private def tryDownload (cfier :String) {
+      // TODO: can we figure out what Maven repository this artifact was downloaded from?
+      val FqId(gid, aid, vers) = fqId
+      val gpath = gid.replace('.', '/')
+      val url = new URL(s"http://repo2.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
+      log.info(s"Downloading $url...")
+      val uconn = url.openConnection.asInstanceOf[HttpURLConnection]
+      uconn.getResponseCode match {
+        case 200 => new FileOutputStream(artifact(cfier)).getChannel transferFrom(
+          Channels.newChannel(uconn.getInputStream), 0, Long.MaxValue)
+        case code => log.info(s"Download failed: $code")
+      }
+    }
+
+    val pfile = file(s"${fqId.artifactId}-${fqId.version}.pom")
     override def pom = _pom
     lazy val _pom = POM.fromFile(pfile).get
   }
 
   class SBTProjectModel (root :File) extends DefaultProjectModel(root) {
     override val flavor = "sbt"
-    // TODO there are perhaps better ways to detect SBT
+    // TODO: are there better ways to detect SBT?
     override def isValid = file("build.sbt").exists || file("projects", "Build.scala").exists
+    override def isRemote = false
     override def name = _extracted.getOrElse("name", super.name)
     override def groupId = _extracted.getOrElse("organization", super.groupId)
     override def artifactId = _extracted.getOrElse("name", super.artifactId)
     override def version = _extracted.getOrElse("version", super.version)
+
     override def sourceDir = _extracted.get("compile:source-directory") map(
       new File(_)) getOrElse(super.sourceDir)
     override def testSourceDir = _extracted.get("test:source-directory") map(
       new File(_)) getOrElse(super.sourceDir)
     override def depends = _extracted.get("library-dependencies") map(SBT.parseDeps) getOrElse(Seq())
+
+    override def hasDocs = file("target", "api").exists
+    override def tryGenerateDocs () = SBT.buildDocs(root)
 
     private lazy val _extracted = SBT.extractProps(
       root, "name", "organization", "version", "library-dependencies",

@@ -48,9 +48,9 @@ class Project(
     * kinds will be returned.
     */
   def findDefn (name :String, kinds :Set[String] = Set()) :Iterable[Loc] = {
-    // if we've never been updated, do a scan now before we return results
-    if (lastUpdated == 0L) rescanProject()
-    else if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject()))
+    // if we've never been updated, do a blocking rescan (we only do such on top-level projects; we
+    // let the findDefnLocal trigger a non-blocking rescan on our depends)
+    if (lastUpdated == 0L) rescanProject(true)
 
     // search this project and its transitive depends
     findDefnLocal(name, kinds, true) ++ using(_session) {
@@ -59,6 +59,7 @@ class Project(
            loc <- deph request(_.findDefnLocal(name, kinds, false))) yield loc
     }
     // (TODO: handle forTest, return results incrementally?)
+    // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
 
   /** Returns the fully qualified name of the supplied element.
@@ -103,7 +104,9 @@ class Project(
   def depends :Seq[Depend] = using(_session) { dependsT.toList }
 
   private def findDefnLocal (name :String, kinds :Set[String], incTest :Boolean) = using(_session) {
-    log.info(s"seeking $name in ${this.name}")
+    if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject(false)))
+
+    log.info(s"Seeking $name in ${this.name}")
     val mixedCase = name.toLowerCase != name
     val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
       (cu.isTest === false or cu.isTest === incTest) and
@@ -117,8 +120,8 @@ class Project(
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
 
-  private def rescanProject () = using(_session) {
-    log.info(s"Rescanning $fqId")
+  private def rescanProject (blocking :Boolean) = using(_session) {
+    log.info(s"Rescanning $fqId ($blocking)")
 
     // clear out our existing compunit and elements tables
     dependsT deleteWhere(d => not (d.groupId === ""))
@@ -133,9 +136,16 @@ class Project(
     processSource(_model.testSourceDir, true)
 
     _lastUpdated = System.currentTimeMillis
+    // TODO: write this to a file or something? or just use last mod time on database file?
   }
 
   private def processSource (dir :File, isTest :Boolean) {
+    if (!dir.exists && !isTest) {
+      log.info(s"No source for ${fqId}. Attempting download...")
+      // try downloading source (TODO: in background?)
+      _model.tryDownloadSource()
+    }
+
     if (dir.exists) {
       val viz = new Visitor() {
         def onCompUnit (unitPath :String) {
@@ -160,14 +170,10 @@ class Project(
       }
       log.info(s"Extracting metadata from ${dir.getPath}...")
       Extractor.extract(dir, viz)
-
-    } else if (!isTest) {
-      log.info(s"No source for ${fqId}. Skipping...")
-      // TODO: try downloading source from Maven Central (in background?)
     }
   }
 
-  private def needsUpdate = false // TODO
+  private def needsUpdate = _lastUpdated == 0L // TODO
 
   private def lastUpdated = {
     if (_lastUpdated == 0L) {

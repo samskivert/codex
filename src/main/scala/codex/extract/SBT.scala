@@ -27,6 +27,11 @@ object SBT {
   def parseDeps (deps :String) :Seq[Depend] =
     (deps split(", ") map(stripPrePost) map(toDep) flatten).toSeq
 
+  /** Invokes `sbt doc` in `root` with the aim of generating javadocs. */
+  def buildDocs (root :File) {
+    Process(Seq("sbt", "doc"), root) !
+  }
+
   private def stripPrePost (s :String) = s.indexOf(")") match {
     case -1 => s.substring(s.indexOf("(")+1)
     case n  => s.substring(0, n)
