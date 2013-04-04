@@ -14,7 +14,7 @@ class ExtractorTest {
   @Test def testJarReading {
     val buf = new StringBuilder
     Extractor.extract(new File("/Users/mdb/.m2/repository/javax/servlet/servlet-api/2.5/servlet-api-2.5-sources.jar"), dumper(buf))
-    println(buf)
+    // println(buf)
   }
 }
 

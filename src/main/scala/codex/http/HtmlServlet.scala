@@ -46,4 +46,7 @@ abstract class HtmlServlet extends AbstractServlet {
   protected def toRow (cols :Seq[Any]) :Node = <tr>{cols.map(c => <td>{c.toString}</td>)}</tr>
   protected def toRow (tup :(String,String)) :Node = toRow(Seq(tup._1, tup._2))
   protected def toRow (tup :(String,String,String)) :Node = toRow(Seq(tup._1, tup._2, tup._3))
+
+  protected def toUL (anys :Seq[Any]) :Node = <ul>{anys map toLI}</ul>
+  protected def toLI (any :Any) :Node = <li>{any}</li>
 }

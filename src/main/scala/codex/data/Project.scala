@@ -31,8 +31,6 @@ class Project(
 ) extends KeyedEntity[Long] with Entity {
   import ProjectDB._
 
-  // def this () = this("", "", "", "", 0L, "") // for unserializing
-
   /** A unique identifier for this project (1 or higher). */
   val id :Long = 0L
 
@@ -42,17 +40,23 @@ class Project(
   /** This project's fully qualified (aka Maven) id, or some approximation thereof. */
   lazy val fqId = FqId(groupId, artifactId, version)
 
-  /** Returns all definitions in this project with the specified name. */
-  def findDefn (name :String) :Iterable[Loc] = {
+  /** Returns all definitions in this project with the specified name.
+    *
+    * @param name the name of the definition. If the name is all lower case, a case insensitive
+    * match is performed, otherwise a case sensitive match is used. (TODO)
+    * @param kinds a restriction on the kinds of definitions that will be returned. If empty, all
+    * kinds will be returned.
+    */
+  def findDefn (name :String, kinds :Set[String] = Set()) :Iterable[Loc] = {
     // if we've never been updated, do a scan now before we return results
     if (lastUpdated == 0L) rescanProject()
     else if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject()))
 
     // search this project and its transitive depends
-    findDefnLocal(name) ++ using(_session) {
+    findDefnLocal(name, kinds, true) ++ using(_session) {
       for (dep <- dependsT where(_.forTest === false) ;
            deph <- projects request(_.forDep(dep)) toSeq ;
-           loc <- deph request(_.findDefnLocal(name))) yield loc
+           loc <- deph request(_.findDefnLocal(name, kinds, false))) yield loc
     }
     // (TODO: handle forTest, return results incrementally?)
   }
@@ -96,11 +100,17 @@ class Project(
   }
 
   /** Returns this project's complete transitive dependency set. */
-  def depends :Seq[Depend] = using(_session) { dependsT.toSeq }
+  def depends :Seq[Depend] = using(_session) { dependsT.toList }
 
-  private def findDefnLocal (name :String) = using(_session) {
+  private def findDefnLocal (name :String, kinds :Set[String], incTest :Boolean) = using(_session) {
     log.info(s"seeking $name in ${this.name}")
-    for (elem <- elementsT where(e => e.name === name) ;
+    val mixedCase = name.toLowerCase != name
+    val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
+      (cu.isTest === false or cu.isTest === incTest) and
+      (if (mixedCase) e.name === name else e.lname === name.toLowerCase))
+      select(e))
+    for (elem <- query ;
+         if (kinds.isEmpty || kinds(elem.kind)) ;
          cu    = compunitsT where(cu => cu.id === elem.unitId) single)
     yield Loc(fqId, elem.id, elem.name, new File(root, cu.path), elem.offset)
   }
@@ -109,6 +119,7 @@ class Project(
 
   private def rescanProject () = using(_session) {
     log.info(s"Rescanning $fqId")
+
     // clear out our existing compunit and elements tables
     dependsT deleteWhere(d => not (d.groupId === ""))
     compunitsT deleteWhere(_.id gt 0)
@@ -117,8 +128,15 @@ class Project(
     // depends are easy, jam 'em in!
     _model.depends foreach dependsT.insert
 
-    val sourceDir = _model.sourceDir
-    if (sourceDir.exists) {
+    // process the source in the main and test directories
+    processSource(_model.sourceDir, false)
+    processSource(_model.testSourceDir, true)
+
+    _lastUpdated = System.currentTimeMillis
+  }
+
+  private def processSource (dir :File, isTest :Boolean) {
+    if (dir.exists) {
       val viz = new Visitor() {
         def onCompUnit (unitPath :String) {
           val path = unitPath.startsWith(rootPath) match {
@@ -126,12 +144,12 @@ class Project(
             case false => log.warning("Visiting compunit outside of project?", "proj", fqId,
                                       "root", rootPath, "path", unitPath) ; unitPath
           }
-          lastUnitId = compunitsT.insert(CompUnit(path)).id
+          lastUnitId = compunitsT.insert(CompUnit(path, isTest)).id
           elemStack = Nil
         }
         def onEnter (name :String, kind :String, offset :Int) {
           val ownerId = elemStack.headOption.getOrElse(0)
-          val elem = Element(ownerId, name, kind, lastUnitId, offset)
+          val elem = Element(ownerId, name, name.toLowerCase, kind, lastUnitId, offset)
           elemStack = elementsT.insert(elem).id :: elemStack
         }
         def onExit (name :String) {
@@ -140,15 +158,13 @@ class Project(
         var lastUnitId = 0
         var elemStack = Nil :List[Int]
       }
-      Extractor.extract(sourceDir, viz)
-      // TODO: extract elements from test source (mark them as such)
+      log.info(s"Extracting metadata from ${dir.getPath}...")
+      Extractor.extract(dir, viz)
 
-    } else {
+    } else if (!isTest) {
       log.info(s"No source for ${fqId}. Skipping...")
       // TODO: try downloading source from Maven Central (in background?)
     }
-
-    _lastUpdated = System.currentTimeMillis
   }
 
   private def needsUpdate = false // TODO
@@ -187,9 +203,10 @@ object ProjectDB extends Schema {
   /** A row in the [[compunits]] table. */
   case class CompUnit (
     /** The path to this unit (relative to project root). */
-    path :String
+    path :String,
+    /** Whether this compunit is in the test or main source tree. */
+    isTest :Boolean
   ) extends KeyedEntity[Int] {
-    def this () = this("") // for unserializing
 
     /** A unique identifier for this unit (1 or higher). */
     val id :Int = 0
@@ -206,6 +223,8 @@ object ProjectDB extends Schema {
     ownerId :Int,
     /** The name of this element. */
     name :String,
+    /** The lower-cased name of this element. */
+    lname :String,
     /** The ''kind'' of this element: module, type, term, etc. */
     kind :String,
     /** The compunit in which this element is defined. */
@@ -213,7 +232,6 @@ object ProjectDB extends Schema {
     /** The (character) offset in the compunit at which this element is defined. */
     offset :Int
   ) extends KeyedEntity[Int] {
-    def this () = this(0, "", "", 0, 0) // for unserializing
 
     /** A unique identifier for this element (1 or higher). */
     val id :Int = 0
@@ -224,6 +242,6 @@ object ProjectDB extends Schema {
   /** Tracks this project's source elements. */
   val elementsT = table[Element]
   on(elementsT)(e => declare(
-    columns(e.ownerId, e.name, e.unitId, e.kind) are(indexed)
+    columns(e.ownerId, e.name, e.lname, e.unitId, e.kind) are(indexed)
   ))
 }

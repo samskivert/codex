@@ -21,12 +21,11 @@ object Extractor {
     * this extractor, parses the files and invokes the appropriate methods on `visitor` as it goes.
     */
   def extract (root :File, visitor :Visitor) {
-    log.info(s"Extracting metadata from ${root.getPath}...")
     // if the source root is a directory, recurse as usual
     if (root.isDirectory) {
       for ((suff, fs) <- allFiles(MSet())(root) groupBy(suff) ;
            exor <- Exors.get(suff)) {
-        log.info(s"Processing $suff ${fs.size}")
+        // log.info(s"Processing $suff ${fs.size}")
         fs foreach exor.process(visitor)
       }
     }

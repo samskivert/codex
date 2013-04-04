@@ -7,7 +7,7 @@ package codex.http
 import java.io.File
 
 import codex._
-import codex.data.{Loc, Project, Projects}
+import codex.data.{Loc, Kinds, Project, Projects}
 import codex.extract.Import
 
 class QueryServlet extends RPCServlet {
@@ -21,7 +21,7 @@ class QueryServlet extends RPCServlet {
     case Seq("import", defn) =>
       val (file, _) = refFile(ctx.body)
       onProject(defn, file, p => {
-        val ls = p findDefn defn
+        val ls = p findDefn(defn, Kinds.types)
         if (ls.isEmpty) "nomatch"
         else Import.computeInfo(new File(file), p.qualify(ls.head.elemId))
       })

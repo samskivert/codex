@@ -17,7 +17,6 @@ case class Depend (
   /** Whether or not this is a test-only dependency. */
   forTest :Boolean
 ) {
-  def this () = this("", "", "", "", false) // for unserializing
-
+  /** Returns the fqId portion of this depend. */
   def toFqId = FqId(groupId, artifactId, version)
 }

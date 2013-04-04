@@ -8,7 +8,7 @@ import scala.collection.mutable.ListBuffer
 import scala.xml.{Node, NodeSeq}
 
 import codex._
-import codex.data.FqId
+import codex.data.{Depend, FqId}
 
 class ProjectServlet extends HtmlServlet {
 
@@ -24,6 +24,7 @@ class ProjectServlet extends HtmlServlet {
         case None     => <p>{s"Unknown project $fqId"}</p>
         case Some(ph) => ph request { p =>
           val acc = ListBuffer[Node]()
+          acc += <div><b>Depends:</b><br/>{toUL(p.depends)}</div>
           p.visit(new p.Viz {
             def onCompUnit (id :Int, path :String) {
               if (!acc.isEmpty) acc += <br/>

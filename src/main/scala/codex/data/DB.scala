@@ -42,7 +42,7 @@ object DB {
 
     // create the database session (which will create the database, if necessary)
     val dbpath = new File(root, name).getAbsolutePath
-    val dburl = s"jdbc:h2:$dbpath;IGNORECASE=TRUE"
+    val dburl = s"jdbc:h2:$dbpath"
     val sess = Session.create(DriverManager.getConnection(dburl, "sa", ""), new H2Adapter)
     // sess.setLogger(dblogger)
 
