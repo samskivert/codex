@@ -17,6 +17,10 @@
     </license>
   </licenses>
 
+  <properties>
+    <scala.version>2.10.1</scala.version>
+  </properties>
+
   <developers>
     <developer>
       <id>samskivert</id>
@@ -50,6 +54,13 @@
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
       <version>1.2.127</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.scala-lang</groupId>
+      <artifactId>scala-library</artifactId>
+      <version>${scala.version}</version>
+      <scope>provided</scope>
     </dependency>
 
     <!-- test dependencies -->
