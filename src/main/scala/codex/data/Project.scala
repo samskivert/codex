@@ -55,7 +55,7 @@ class Project(
   def findDefn[T] (name :String, kinds :Set[String], map :(Project => Loc => T)) :Iterable[T] = {
     // if we've never been updated, do a blocking rescan (we only do such on top-level projects; we
     // let the findDefnLocal trigger a non-blocking rescan on our depends)
-    if (lastUpdated == 0L) rescanProject(true)
+    if (lastIndexed == 0L) reindex()
 
     // TODO: handle forTest
     val deps = depends filterNot(_.forTest)
@@ -63,7 +63,8 @@ class Project(
 
     // TODO: return results incrementally?
 
-    // search this project and its transitive depends
+    // search this project and its transitive depends (this will auto-create projects for our
+    // transitive dependencies if they don't already exist)
     findDefnLocal(name, kinds, map, true) ++ projects.request { ps =>
       for { dh  <- deps flatMap ps.forDep
             loc <- dh request(_ findDefnLocal(name, kinds, map, false)) } yield loc
@@ -123,9 +124,34 @@ class Project(
   /** Returns this project's complete transitive dependency set. */
   def depends :Seq[Depend] = using(_session) { dependsT.toList }
 
+  /** Rebuilds this project's indices. */
+  def reindex () = using(_session) {
+    log.info(s"Rescanning $fqId...")
+    _lastIndexed = System.currentTimeMillis
+
+    // clear out our existing compunit and elements tables
+    dependsT deleteWhere(d => not (d.groupId === ""))
+    compunitsT deleteWhere(_.id gt 0)
+    elementsT deleteWhere(_.id gt 0)
+
+    // depends are easy, jam 'em in!
+    _model.depends foreach dependsT.insert
+
+    // process the source in the main and test directories
+    processSource(_model.sourceDir, false)
+    processSource(_model.testSourceDir, true)
+    // TODO: write this to a file or something? or just use last mod time on database file?
+  }
+
+  private def reindexIfNeeded () {
+    if (_model.needsReindex(lastIndexed)) reindex()
+  }
+
   private def findDefnLocal[T] (name :String, kinds :Set[String], f :(Project => Loc => T),
                                 incTest :Boolean) = {
-    if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject(false)))
+    // queue ourselves up for a reindex check every time we're searched
+    projects invoke(_ handle(fqId) invoke(_ reindexIfNeeded()))
+
     // log.info(s"Seeking $name in ${this.name}")
     val mixedCase = name.toLowerCase != name
     using(_session) {
@@ -154,25 +180,6 @@ class Project(
   }
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
-
-  private def rescanProject (blocking :Boolean) = using(_session) {
-    log.info(s"Rescanning $fqId ($blocking)")
-
-    // clear out our existing compunit and elements tables
-    dependsT deleteWhere(d => not (d.groupId === ""))
-    compunitsT deleteWhere(_.id gt 0)
-    elementsT deleteWhere(_.id gt 0)
-
-    // depends are easy, jam 'em in!
-    _model.depends foreach dependsT.insert
-
-    // process the source in the main and test directories
-    processSource(_model.sourceDir, false)
-    processSource(_model.testSourceDir, true)
-
-    _lastUpdated = System.currentTimeMillis
-    // TODO: write this to a file or something? or just use last mod time on database file?
-  }
 
   private def processSource (dir :File, isTest :Boolean) {
     if (!dir.exists && !isTest) {
@@ -208,16 +215,14 @@ class Project(
     }
   }
 
-  private def needsUpdate = _lastUpdated == 0L // TODO
-
-  private def lastUpdated = {
-    if (_lastUpdated == 0L) {
+  private def lastIndexed = {
+    if (_lastIndexed == 0L) {
       val dbfile = file(_metaDir, "project.h2.db")
-
+      if (dbfile.exists) _lastIndexed = dbfile.lastModified
     }
-    _lastUpdated
+    _lastIndexed
   }
-  private var _lastUpdated = 0L
+  private var _lastIndexed = 0L
 
   private lazy val _model = ProjectModel.forProject(flavor, fqId, root)
 

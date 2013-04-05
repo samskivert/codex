@@ -47,6 +47,12 @@ abstract class ProjectModel (
   /** Attempts to download or generate the documentation for this project. */
   def tryGenerateDocs () {}
 
+  /** Returns true if this project should be reindexed.
+    * @param lastIndexed the time at which the project was last indexed. */
+  def needsReindex (lastIndexed :Long) =
+    // default is not super smart but is a good basis for non-local projects
+    (sourceDir.lastModified > lastIndexed || testSourceDir.lastModified > lastIndexed)
+
   /** Creates a file, relative to the project root, with the supplied path components. */
   protected def file (comps :String*) = codex.file(root, comps :_*)
 }
@@ -72,13 +78,13 @@ object ProjectModel {
   }) flatMap(m => if (!m.isValid) None else Some(m))
 
   class DefaultProjectModel (root :File) extends ProjectModel(root) {
-    override val flavor = "unknown"
-    override def isValid = root.isDirectory // we're not picky!
-    override def isRemote = false
-    override def name = root.getName
-    override def groupId = "unknown"
+    override val flavor     = "unknown"
+    override def isValid    = root.isDirectory // we're not picky!
+    override def isRemote   = false
+    override def name       = root.getName
+    override def groupId    = "unknown"
     override def artifactId = root.getName
-    override def version = "unknown"
+    override def version    = "unknown"
 
     override def sourceDir = {
       val options = Seq(file("src", "main"), file("src"))
@@ -92,23 +98,27 @@ object ProjectModel {
   }
 
   abstract class POMProjectModel (root :File) extends ProjectModel(root) {
-    override def name =  pom.name getOrElse root.getName
-    override def groupId = pom.groupId
+    override def name       = pom.name getOrElse root.getName
+    override def groupId    = pom.groupId
     override def artifactId = pom.artifactId
-    override def version = pom.version
+    override def version    = pom.version
+
     // TODO hack: add scala and java depends as appropriate
     override def depends = pom.transitiveDepends(true) map { d =>
       Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test")
     }
+
     protected def pom :POM
   }
 
   class MavenProjectModel (root :File) extends POMProjectModel(root) {
-    override val flavor = "maven"
-    override def isValid = pfile.exists
-    override def isRemote = false
-    override def sourceDir = file("src", "main") // TODO: read from POM
-    override def testSourceDir = file("src", "test") // TODO: read from POM
+    override val flavor        = "maven"
+    override def isValid       = pfile.exists
+    override def isRemote      = false
+    override def sourceDir     = pom.buildProps.get("sourceDirectory") map(file(_)) getOrElse(
+      file("src", "main"))
+    override def testSourceDir = pom.buildProps.get("testSourceDirectory") map(file(_)) getOrElse(
+      file("src", "test"))
 
     override def hasDocs = file("target", "site", "apidocs").exists
     override def tryGenerateDocs () = Maven.buildDocs(root)
@@ -116,18 +126,25 @@ object ProjectModel {
     val pfile = file("pom.xml")
     override def pom = _pom
     lazy val _pom = POM.fromFile(pfile).get
+
+    override def needsReindex (lastIndexed :Long) =
+      // TODO: should we check every subdirectory of {testS|s}ourceDir? probably...
+      super.needsReindex(lastIndexed) || (pfile.lastModified > lastIndexed)
   }
 
   class M2ProjectModel (root :File, fqId :FqId) extends POMProjectModel(root) {
-    override val flavor = "m2"
-    override def isValid = pfile.exists
-    override def isRemote = true
-    override def sourceDir = artifact("sources")
+    override val flavor        = "m2"
+    override def isValid       = pfile.exists
+    override def isRemote      = true
+    override def sourceDir     = artifact("sources")
     override def testSourceDir = root
 
     override def tryDownloadSource () = tryDownload("sources")
     override def hasDocs = artifact("javadoc").exists
     override def tryGenerateDocs () = tryDownload("javadoc")
+
+    override def needsReindex (lastIndexed :Long) =
+      super.needsReindex(lastIndexed) || (pfile.lastModified > lastIndexed)
 
     private def artifact (cfier :String) =
       file(pfile.getName.replaceAll(".pom", s"-$cfier.jar"))
@@ -152,23 +169,29 @@ object ProjectModel {
   }
 
   class SBTProjectModel (root :File) extends DefaultProjectModel(root) {
-    override val flavor = "sbt"
-    // TODO: are there better ways to detect SBT?
-    override def isValid = file("build.sbt").exists || file("projects", "Build.scala").exists
-    override def isRemote = false
-    override def name = _extracted.getOrElse("name", super.name)
-    override def groupId = _extracted.getOrElse("organization", super.groupId)
+    override val flavor     = "sbt"
+    override def isValid    = _bfile.exists
+    override def isRemote   = false
+    override def name       = _extracted.getOrElse("name", super.name)
+    override def groupId    = _extracted.getOrElse("organization", super.groupId)
     override def artifactId = _extracted.getOrElse("name", super.artifactId)
-    override def version = _extracted.getOrElse("version", super.version)
+    override def version    = _extracted.getOrElse("version", super.version)
 
-    override def sourceDir = _extracted.get("compile:source-directory") map(new File(_)) getOrElse(
-      super.sourceDir)
-    override def testSourceDir = _extracted.get("test:source-directory") map(new File(_)) getOrElse(
-      super.sourceDir)
+    override def sourceDir = _extracted.get("compile:source-directory") map(
+      new File(_)) getOrElse(super.sourceDir)
+    override def testSourceDir = _extracted.get("test:source-directory") map(
+      new File(_)) getOrElse(super.sourceDir)
     override def depends = _extracted.get("library-dependencies") map(SBT.parseDeps) getOrElse(Seq())
 
     override def hasDocs = file("target", "api").exists
     override def tryGenerateDocs () = SBT.buildDocs(root)
+
+    override def needsReindex (lastIndexed :Long) =
+      super.needsReindex(lastIndexed) || (_bfile.lastModified > lastIndexed)
+
+    // TODO: are there better ways to detect SBT?
+    private lazy val _bfile = Seq(file("build.sbt"), file("projects", "Build.scala")) find(
+      _.exists) getOrElse(file("build.sbt"))
 
     private lazy val _extracted = SBT.extractProps(
       root, "name", "organization", "version", "library-dependencies",
