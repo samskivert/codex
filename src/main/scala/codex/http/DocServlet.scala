@@ -81,6 +81,6 @@ class DocServlet extends HttpServlet {
     }
   }
 
-  private val m2Root = file(new File(System.getProperty("user.home")), ".m2", "repository")
-  private val ivyRoot = file(new File(System.getProperty("user.home")), ".ivy2", "cache")
+  private val m2Root = file(home, ".m2", "repository")
+  private val ivyRoot = file(home, ".ivy2", "cache")
 }

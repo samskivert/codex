@@ -22,7 +22,7 @@ package object codex {
 
     private val _props = {
       val p = new Properties
-      val f = new File("codex.properties")
+      val f = file("codex.properties")
       try {
         if (f.exists) p.load(new FileReader(f))
         else log.info("No codex.properties, using defaults.")
@@ -42,6 +42,9 @@ package object codex {
   /** Provides logging to all and sundry. */
   val log = new Log("codex")
 
+  /** The user's home directory. */
+  val home = file(System.getProperty("user.home"))
+
   /** An executor service for great concurrency. */
   implicit val exec = Executors.newFixedThreadPool(config.threadPoolSize)
 
@@ -51,7 +54,7 @@ package object codex {
   /** Returns our main Codex metadata directory (creating it if necessary). */
   lazy val metaDir :File = {
     // TODO: use appropriate directory depending on platform (maybe not $HOME)
-    val dir = new File(new File(System.getProperty("user.home")), ".codex")
+    val dir = file(home, ".codex")
     if (!dir.exists && !dir.mkdir) {
       log.warning("Unable to create Codex metadata directory: " + dir.getAbsolutePath)
       // TODO: terminate?
@@ -60,6 +63,9 @@ package object codex {
   }
 
   val projects = entity(new data.Projects)
+
+  /** Creates a file with `path`. */
+  def file (path :String) = new File(path)
 
   /** Creates a new file by combining `root` with `segs` in the natural way. */
   def file (root :File, segs :String*) = (root /: segs)(new File(_, _))

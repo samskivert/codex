@@ -161,10 +161,10 @@ object ProjectModel {
     override def artifactId = _extracted.getOrElse("name", super.artifactId)
     override def version = _extracted.getOrElse("version", super.version)
 
-    override def sourceDir = _extracted.get("compile:source-directory") map(
-      new File(_)) getOrElse(super.sourceDir)
-    override def testSourceDir = _extracted.get("test:source-directory") map(
-      new File(_)) getOrElse(super.sourceDir)
+    override def sourceDir = _extracted.get("compile:source-directory") map(new File(_)) getOrElse(
+      super.sourceDir)
+    override def testSourceDir = _extracted.get("test:source-directory") map(new File(_)) getOrElse(
+      super.sourceDir)
     override def depends = _extracted.get("library-dependencies") map(SBT.parseDeps) getOrElse(Seq())
 
     override def hasDocs = file("target", "api").exists
@@ -178,5 +178,5 @@ object ProjectModel {
   private def m2root (d :Depend) =
     file(m2repo, Dependency(d.groupId, d.artifactId, d.version).repositoryPath :_*)
 
-  private val m2repo = file(new File(System.getProperty("user.home")), ".m2", "repository")
+  private val m2repo = file(home, ".m2", "repository")
 }

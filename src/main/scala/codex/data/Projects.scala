@@ -83,7 +83,7 @@ object ProjectsUtil {
     else if (isProjectRoot(curDir)) Some(curDir)
     else findRoot(curDir.getParentFile)
 
-  def isProjectRoot (dir :File) = RootFiles exists (n => new File(dir, n).exists)
+  def isProjectRoot (dir :File) = RootFiles exists (file(dir, _).exists)
 
   // TODO: expand this and/or specialize it based on the suffix of the candidate file
   private val RootFiles = List(".git", ".hg", "build.xml", "pom.xml", "build.sbt", "Makefile")

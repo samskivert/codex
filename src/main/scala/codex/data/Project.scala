@@ -136,7 +136,7 @@ class Project(
       for (elem <- query ;
            if (kinds.isEmpty || kinds(elem.kind)) ;
            cu    = compunitsT where(cu => cu.id === elem.unitId) single)
-      yield Loc(fqId, elem.id, elem.name, elem.kind, new File(root, cu.path), elem.offset)
+      yield Loc(fqId, elem.id, elem.name, elem.kind, file(root, cu.path), elem.offset)
     } map f(this)
   }
 
@@ -212,6 +212,8 @@ class Project(
 
   private def lastUpdated = {
     if (_lastUpdated == 0L) {
+      val dbfile = file(_metaDir, "project.h2.db")
+
     }
     _lastUpdated
   }
@@ -220,7 +222,7 @@ class Project(
   private lazy val _model = ProjectModel.forProject(flavor, fqId, root)
 
   private lazy val _metaDir = {
-    val dir = new File(rootPath, ".codex")
+    val dir = file(root, ".codex")
     if (!dir.exists) dir.mkdir()
     dir
   }

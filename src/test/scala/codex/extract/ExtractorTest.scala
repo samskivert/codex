@@ -8,13 +8,19 @@ import java.io.{File, StringReader}
 import org.junit.Assert._
 import org.junit._
 
+import codex._
+
 class ExtractorTest {
   import ExtractorTest._
 
   @Test def testJarReading {
     val buf = new StringBuilder
-    Extractor.extract(new File("/Users/mdb/.m2/repository/javax/servlet/servlet-api/2.5/servlet-api-2.5-sources.jar"), dumper(buf))
-    // println(buf)
+    val path = ".m2/repository/javax/servlet/servlet-api/2.5/servlet-api-2.5-sources.jar"
+    val jar = file(home, path)
+    if (jar.exists) {
+      Extractor.extract(jar, dumper(buf))
+      assertTrue(buf.length > 0) // TODO: test something?
+    }
   }
 }
 
