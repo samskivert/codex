@@ -14,6 +14,8 @@ case class Loc (
   elemId :Int,
   /** The simple name of the definition. */
   name :String,
+  /** The kind of the definition. */
+  kind :String,
   /** The compilation unit that contains this definition. */
   compunit :File,
   /** The character offset in `compunit` at which this definition begins. */

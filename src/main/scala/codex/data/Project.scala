@@ -8,6 +8,7 @@ import java.io.File
 import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
+import scala.annotation.tailrec
 
 import codex._
 import codex.extract.{Extractor, ProjectModel, Visitor}
@@ -40,23 +41,27 @@ class Project(
   /** This project's fully qualified (aka Maven) id, or some approximation thereof. */
   lazy val fqId = FqId(groupId, artifactId, version)
 
-  /** Returns all definitions in this project with the specified name.
+  /** Returns all definitions in this project's extent with the specified name.
     *
     * @param name the name of the definition. If the name is all lower case, a case insensitive
     * match is performed, otherwise a case sensitive match is used. (TODO)
     * @param kinds a restriction on the kinds of definitions that will be returned. If empty, all
     * kinds will be returned.
     */
-  def findDefn (name :String, kinds :Set[String] = Set()) :Iterable[Loc] = {
+  def findDefn (name :String, kinds :Set[String] = Set()) :Iterable[Loc] =
+    findDefn(name, kinds, p => l => l)
+
+  /** Like the other `findDefn`, but which maps via `map` in the owning project's context. */
+  def findDefn[T] (name :String, kinds :Set[String], map :(Project => Loc => T)) :Iterable[T] = {
     // if we've never been updated, do a blocking rescan (we only do such on top-level projects; we
     // let the findDefnLocal trigger a non-blocking rescan on our depends)
     if (lastUpdated == 0L) rescanProject(true)
 
     // search this project and its transitive depends
-    findDefnLocal(name, kinds, true) ++ using(_session) {
+    findDefnLocal(name, kinds, map, true) ++ using(_session) {
       for (dep <- dependsT where(_.forTest === false) ;
            deph <- projects request(_.forDep(dep)) toSeq ;
-           loc <- deph request(_.findDefnLocal(name, kinds, false))) yield loc
+           loc <- deph request(_.findDefnLocal(name, kinds, map, false))) yield loc
     }
     // (TODO: handle forTest, return results incrementally?)
     // TODO: report when we queued up rescans on projects so caller knows to retry on nada
@@ -65,19 +70,28 @@ class Project(
   /** Returns the fully qualified name of the supplied element.
     * TODO: currently assumes Java-like element separator (.).
     */
-  def qualify (elemId :Int) :String = using(_session) {
-    var curId = elemId
-    val buf = new StringBuilder
-    while (curId != 0) elementsT.lookup(curId) match {
-      case Some(elem) =>
-        if (buf.length > 0) buf.insert(0, ".")
-        buf.insert(0, elem.name)
-        curId = elem.ownerId
-      case None =>
-        log.warning("Missing element in qualify()", "elemId", elemId, "curId", curId)
-        curId = 0
+  def qualify (loc :Loc) :String = comps(loc).mkString(".")
+
+  /** Returns (`loc`, `fqName`, `docPath`) for the supplied element. */
+  def fordoc (loc :Loc) :(Loc, String, String) = {
+    val cs = comps(loc)
+    val docurl = cs flatMap(_ split("\\.")) mkString("/")
+    // TODO: figure out a less hacky way of handling Scala objects
+    val hackurl = loc.kind match {
+      case "object" => docurl + "$"
+      case _ => docurl
     }
-    buf.toString
+    (loc, cs.mkString("."), s"$flavor/$groupId/$artifactId/$version/$hackurl.html")
+  }
+
+  /** Requests that this project attempt to download its doc jar if it's never done so. */
+  def checkdoc () {
+    // TODO: who should be responsible for not repeatedly attempting to download non-existent docs?
+    // maybe have the project model do it?
+    if (!_model.hasDocs) {
+      log.info("Trying docgen for checkdoc", "proj", fqId)
+      _model.tryGenerateDocs()
+    }
   }
 
   /** Used by [[visit]] to visit all comp units and elements in this project. */
@@ -105,19 +119,34 @@ class Project(
   /** Returns this project's complete transitive dependency set. */
   def depends :Seq[Depend] = using(_session) { dependsT.toList }
 
-  private def findDefnLocal (name :String, kinds :Set[String], incTest :Boolean) = using(_session) {
+  private def findDefnLocal[T] (name :String, kinds :Set[String], f :(Project => Loc => T),
+                                incTest :Boolean) = {
     if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject(false)))
-
     log.info(s"Seeking $name in ${this.name}")
     val mixedCase = name.toLowerCase != name
-    val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
-      (cu.isTest === false or cu.isTest === incTest) and
-      (if (mixedCase) e.name === name else e.lname === name.toLowerCase))
-      select(e))
-    for (elem <- query ;
-         if (kinds.isEmpty || kinds(elem.kind)) ;
-         cu    = compunitsT where(cu => cu.id === elem.unitId) single)
-    yield Loc(fqId, elem.id, elem.name, new File(root, cu.path), elem.offset)
+    using(_session) {
+      val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
+        (cu.isTest === false or cu.isTest === incTest) and
+        (if (mixedCase) e.name === name else e.lname === name.toLowerCase))
+        select(e))
+      for (elem <- query ;
+           if (kinds.isEmpty || kinds(elem.kind)) ;
+           cu    = compunitsT where(cu => cu.id === elem.unitId) single)
+      yield Loc(fqId, elem.id, elem.name, elem.kind, new File(root, cu.path), elem.offset)
+    } map f(this)
+  }
+
+  private def comps (loc :Loc) :List[String] = using(_session) {
+    @tailrec def loop (curId :Int, comps :List[String]) :List[String] = {
+      if (curId == 0) comps
+      else elementsT.lookup(curId) match {
+        case Some(elem) => loop(elem.ownerId, elem.name :: comps)
+        case None =>
+          log.warning("Missing element in comps()", "proj", fqId, "loc", loc, "curId", curId)
+          comps
+      }
+    }
+    loop(loc.elemId, Nil)
   }
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"

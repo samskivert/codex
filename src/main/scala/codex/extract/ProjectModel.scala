@@ -126,8 +126,8 @@ object ProjectModel {
     override def testSourceDir = root
 
     override def tryDownloadSource () = tryDownload("sources")
-    override def hasDocs = artifact("docs").exists
-    override def tryGenerateDocs () = tryDownload("docs")
+    override def hasDocs = artifact("javadoc").exists
+    override def tryGenerateDocs () = tryDownload("javadoc")
 
     private def artifact (cfier :String) =
       file(pfile.getName.replaceAll(".pom", s"-$cfier.jar"))

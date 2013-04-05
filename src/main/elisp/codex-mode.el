@@ -53,7 +53,7 @@ can be redefined to provide custom behavior."
   "Displays the documentation for the supplied symbol. Results
 are displayed in your web browser."
   (interactive (list (read-from-minibuffer "Symbol: " (thing-at-point 'symbol))))
-  (codex-browse-url (concat codex-url "docs/" name))
+  (codex-browse-url (concat codex-url "query/findoc/" name (buffer-file-name)))
   )
 
 (defun codex-open-symbol (name)

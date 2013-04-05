@@ -12,37 +12,51 @@ import codex.extract.Import
 
 class QueryServlet extends AbstractServlet {
 
-  override def process (ctx :Context) = ctx.success(ctx.args match {
+  override def process (ctx :Context) = ctx.args match {
     case Seq("find", defn) =>
-      val (file, _) = refFile(ctx.body)
-      val ls = onProject(defn, file, _ findDefn defn)
-      if (ls.isEmpty) "nomatch" // errNotFound("Definition not found")
-      else ls map format mkString("\n")
+      val (path, _) = refPath(ctx.body)
+      val ls = onProject(defn, path, _ findDefn defn)
+      def format (loc :Loc) = s"match ${loc.offset} ${loc.compunit.getAbsolutePath}"
+      ctx.success(matches(ls, format))
 
     case Seq("import", defn) =>
-      val (file, _) = refFile(ctx.body)
-      onProject(defn, file, p => {
-        val ls = p findDefn(defn, Kinds.types)
-        if (ls.isEmpty) "nomatch"
-        else Import.computeInfo(new File(file), p.qualify(ls.head.elemId))
-      })
+      val (path, _) = refPath(ctx.body)
+      val ls = onProject(defn, path, _ findDefn(defn, Kinds.types, p => l => p.qualify(l)))
+      def format (fqElem :String) = Import.computeInfo(new File(path), fqElem)
+      ctx.success(matches(ls, format))
+
+    case Seq("findoc", defn, rest @ _*) =>
+      // TODO: URL encode the path so that it's just one element (so as to work on non-Unix
+      // platforms... blah)
+      val path = "/" + rest.mkString(File.separator)
+      val ls = onProject(defn, path, _ findDefn(defn, Kinds.types, _ fordoc))
+      // fire off a request for these projects to download their docs if they don't have 'em
+      (Set() ++ ls map(_._1.projId)) foreach { pid =>
+        projects request(_ forId(pid) map(_ invoke(_ checkdoc()))) }
+      // and deliver the results based on whether we got 0, 1, or many matches
+      ls match {
+        case Seq() => errNotFound(s"Found no element $defn")
+        case Seq((l, fqNm, path)) => ctx.rsp.sendRedirect(path)
+        case _     => ctx.success(Templates.tmpl("docs.tmpl"),
+                                  Map("name" -> defn, "matches" -> ls))
+      }
 
     case _ => errBadRequest(s"Unknown query: ${ctx.args mkString "/"}")
-  })
-
-  private def refFile (body :String) = body.split("\n") match {
-    case Array(file, offset) => (file, offset.toInt)
-    case Array(file)         => (file, -1)
-    case _ => errBadRequest("Request missing file and (optional) offset.")
   }
 
-  private def onProject[R] (defn :String, file :String, f :(Project => R)) :R = {
-    projects request (_ forPath file) match {
+  private def matches[T] (ms :Iterable[T], fmt :(T => String)) =
+    if (ms.isEmpty) "nomatch" else ms map fmt mkString("\n")
+
+  private def refPath (body :String) = body.split("\n") match {
+    case Array(path, offset) => (path, offset.toInt)
+    case Array(path)         => (path, -1)
+    case _ => errBadRequest("Request missing path and (optional) offset.")
+  }
+
+  private def onProject[R] (defn :String, path :String, f :(Project => R)) :R = {
+    projects request (_ forPath path) match {
       case Some(p) => p request f
-      case None => errNotFound(s"Unable to determine project for $file")
+      case None => errNotFound(s"Unable to determine project for $path")
     }
   }
-
-  // formats a location for responses
-  private def format (loc :Loc) = s"match ${loc.offset} ${loc.compunit.getAbsolutePath}"
 }

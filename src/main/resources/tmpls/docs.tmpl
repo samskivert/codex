@@ -1,0 +1,26 @@
+<html>
+  <head>
+    <title>Codex: {{name}}</title>
+    <style>
+      table {
+        border-collapse: collapse;
+      }
+      td {
+        border: 1px solid;
+        padding: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Query: {{name}}</h2>
+    <table cellpadding=0 cellspacing=0>
+      {{#matches}}
+      <tr>
+        <td>{{_1.projId.artifactId}}</td>
+        <td>{{_1.projId.version}}</td>
+        <td>{{_1.kind}} <a href="/{{_3}}">{{_2}}</a></td>
+      </tr>
+      {{/matches}}
+    </table>
+  </body>
+</html>
