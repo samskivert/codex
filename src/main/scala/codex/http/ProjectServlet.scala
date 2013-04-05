@@ -4,6 +4,8 @@
 
 package codex.http
 
+import java.text.DateFormat
+import java.util.Date
 import scala.collection.mutable.ListBuffer
 import scala.xml.{Node, NodeSeq}
 
@@ -13,7 +15,7 @@ import codex.data.{Depend, FqId}
 class ProjectServlet extends AbstractServlet {
 
   override def process (ctx :Context) = ctx.args match {
-    case Seq(gid, aid, vers) =>
+    case Seq(gid, aid, vers, rest @ _*) =>
       val fqId = FqId(gid, aid, vers)
       val data = projects request(_ forId(fqId)) match {
         case None     => errNotFound(s"Unknown project $fqId")
@@ -32,8 +34,11 @@ class ProjectServlet extends AbstractServlet {
             private var _curPath = ""
             private val _elems = ListBuffer[String]()
           })
+          // force a reindex if requested
+          if (rest contains "reindex") p.reindex()
           Map("title"   -> s"$gid - $aid - $vers",
               "project" -> p.fqId,
+              "indexed" -> _fmt.format(new Date(p.lastIndexed)),
               "depends" -> p.depends,
               "units"   -> unitBuf)
         }
@@ -42,4 +47,6 @@ class ProjectServlet extends AbstractServlet {
 
     case _ => errBadRequest(s"Invalid project id: ${ctx.args mkString "/"}")
   }
+
+  private val _fmt = DateFormat.getDateTimeInstance
 }

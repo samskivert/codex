@@ -143,6 +143,16 @@ class Project(
     // TODO: write this to a file or something? or just use last mod time on database file?
   }
 
+  /** Returns the time at which this project was last indexed. */
+  def lastIndexed = {
+    if (_lastIndexed == 0L) {
+      val dbfile = file(_metaDir, "project.h2.db")
+      if (dbfile.exists) _lastIndexed = dbfile.lastModified
+    }
+    _lastIndexed
+  }
+  private var _lastIndexed = 0L
+
   private def reindexIfNeeded () {
     if (_model.needsReindex(lastIndexed)) reindex()
   }
@@ -214,15 +224,6 @@ class Project(
       Extractor.extract(dir, viz)
     }
   }
-
-  private def lastIndexed = {
-    if (_lastIndexed == 0L) {
-      val dbfile = file(_metaDir, "project.h2.db")
-      if (dbfile.exists) _lastIndexed = dbfile.lastModified
-    }
-    _lastIndexed
-  }
-  private var _lastIndexed = 0L
 
   private lazy val _model = ProjectModel.forProject(flavor, fqId, root)
 
