@@ -57,13 +57,17 @@ class Project(
     // let the findDefnLocal trigger a non-blocking rescan on our depends)
     if (lastUpdated == 0L) rescanProject(true)
 
+    // TODO: handle forTest
+    val deps = depends filterNot(_.forTest)
+    log.info(s"${this.name} (and ${deps.size} depends) findDefn: $name")
+
+    // TODO: return results incrementally?
+
     // search this project and its transitive depends
-    findDefnLocal(name, kinds, map, true) ++ using(_session) {
-      for (dep <- dependsT where(_.forTest === false) ;
-           deph <- projects request(_.forDep(dep)) toSeq ;
-           loc <- deph request(_.findDefnLocal(name, kinds, map, false))) yield loc
+    findDefnLocal(name, kinds, map, true) ++ projects.request { ps =>
+      for { dh  <- deps flatMap ps.forDep
+            loc <- dh request(_ findDefnLocal(name, kinds, map, false)) } yield loc
     }
-    // (TODO: handle forTest, return results incrementally?)
     // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
 
@@ -122,7 +126,7 @@ class Project(
   private def findDefnLocal[T] (name :String, kinds :Set[String], f :(Project => Loc => T),
                                 incTest :Boolean) = {
     if (needsUpdate) projects invoke (_ handle(fqId) invoke (_ rescanProject(false)))
-    log.info(s"Seeking $name in ${this.name}")
+    // log.info(s"Seeking $name in ${this.name}")
     val mixedCase = name.toLowerCase != name
     using(_session) {
       val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
