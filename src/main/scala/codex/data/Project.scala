@@ -68,12 +68,14 @@ class Project(
   def qualify (elemId :Int) :String = using(_session) {
     var curId = elemId
     val buf = new StringBuilder
-    while (curId != 0) {
-      val elem = elementsT.lookup(curId).get
-      println(elem)
-      if (buf.length > 0) buf.insert(0, ".")
-      buf.insert(0, elem.name)
-      curId = elem.ownerId
+    while (curId != 0) elementsT.lookup(curId) match {
+      case Some(elem) =>
+        if (buf.length > 0) buf.insert(0, ".")
+        buf.insert(0, elem.name)
+        curId = elem.ownerId
+      case None =>
+        log.warning("Missing element in qualify()", "elemId", elemId, "curId", curId)
+        curId = 0
     }
     buf.toString
   }
