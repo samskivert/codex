@@ -48,7 +48,7 @@ abstract class ProjectModel (
   def tryGenerateDocs () {}
 
   /** Creates a file, relative to the project root, with the supplied path components. */
-  protected def file (comps :String*) = ProjectModel.file(root, comps :_*)
+  protected def file (comps :String*) = codex.file(root, comps :_*)
 }
 
 object ProjectModel {
@@ -178,6 +178,5 @@ object ProjectModel {
   private def m2root (d :Depend) =
     file(m2repo, Dependency(d.groupId, d.artifactId, d.version).repositoryPath :_*)
 
-  private def file (root :File, segs :String*) = (root /: segs)(new File(_, _))
   private val m2repo = file(new File(System.getProperty("user.home")), ".m2", "repository")
 }

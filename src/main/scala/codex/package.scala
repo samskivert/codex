@@ -61,6 +61,9 @@ package object codex {
 
   val projects = entity(new data.Projects)
 
+  /** Creates a new file by combining `root` with `segs` in the natural way. */
+  def file (root :File, segs :String*) = (root /: segs)(new File(_, _))
+
   private def onceSignal () = new Signal[Unit]() {
     override def addConnection (prio :Int, listener :Unit => Unit) =
       super.addConnection(prio, listener).once()

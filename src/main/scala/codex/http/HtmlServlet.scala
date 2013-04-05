@@ -4,7 +4,7 @@
 
 package codex.http
 
-import javax.servlet.http.HttpServletResponse
+import javax.servlet.http.{HttpServletResponse => HSResponse}
 import scala.xml.{Node, NodeSeq, Text, XML}
 import scala.xml.dtd.{DocType, SystemID}
 
@@ -22,7 +22,7 @@ abstract class HtmlServlet extends AbstractServlet {
    * @return an XML tree wrapped in a `<body>` tag. */
   def process (ctx :Context) :NodeSeq
 
-  override def writeOutput (rsp :HttpServletResponse, ctx :Context, result :NodeSeq) = {
+  override def writeOutput (rsp :HSResponse, ctx :Context, result :NodeSeq) = {
     val page = (<html><head>
                 <title>codex: {title(ctx)}</title>
                 <link rel="stylesheet" type="text/css" href="/styles.css"/>

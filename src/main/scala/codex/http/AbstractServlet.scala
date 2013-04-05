@@ -39,9 +39,6 @@ abstract class AbstractServlet extends HttpServlet {
   /** Writes the output of `process` (if any) to the servlet response. */
   def writeOutput (rsp :HSResponse, ctx :Context, result :RES) :Unit
 
-  /** Returns true if access to this servlet is restricted to admins. Defaults to false. */
-  def requireAdmin = false
-
   // various error throwing convenience methods
   protected def errBadRequest     (errmsg :String) = errorC(SC_BAD_REQUEST, errmsg)
   protected def errInternalError  (errmsg :String) = errorC(SC_INTERNAL_SERVER_ERROR, errmsg)
