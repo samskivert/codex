@@ -81,7 +81,7 @@ class Project(
       case "object" => docurl + "$"
       case _ => docurl
     }
-    (loc, cs.mkString("."), s"$flavor/$groupId/$artifactId/$version/$hackurl.html")
+    (loc, cs.mkString("."), s"/$flavor/$groupId/$artifactId/$version/$hackurl.html")
   }
 
   /** Requests that this project attempt to download its doc jar if it's never done so. */
