@@ -1,0 +1,39 @@
+<html>
+  <head>
+    <title>Codex: {{title}}</title>
+  </head>
+  <body>
+    <div>
+      <h2>{{project.artifactId}}</h2>
+
+      <p>
+        <b>Organization:</b> {{project.groupId}}<br/>
+        <b>Version:</b> {{project.version}}<br/>
+      </p>
+
+      <b>Depends:</b><br/>
+      <ul>
+        {{#depends}}
+        <li>
+          <a href="/project/{{groupId}}/{{artifactId}}/{{version}}">{{artifactId}}</a> -
+          {{version}} -
+          {{groupId}}{{#forTest}} - test{{/forTest}}
+        </li>
+        {{/depends}}
+        {{^depends}}
+        <li>None</li>
+        {{/depends}}
+      </ul>
+    </div>
+
+    <div>
+      <b>Comp Units:</b><br/>
+      <ul>
+        {{#units}}
+        <li><em>{{path}}</em>:<br/>
+          {{#elems}}<span> {{.}}</span>{{/elems}}</li>
+        {{/units}}
+      </ul>
+    </div>
+  </body>
+</html>

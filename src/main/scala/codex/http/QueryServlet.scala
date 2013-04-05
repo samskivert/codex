@@ -10,8 +10,9 @@ import codex._
 import codex.data.{Loc, Kinds, Project, Projects}
 import codex.extract.Import
 
-class QueryServlet extends RPCServlet {
-  override def process (ctx :Context) = ctx.args match {
+class QueryServlet extends AbstractServlet {
+
+  override def process (ctx :Context) = ctx.success(ctx.args match {
     case Seq("find", defn) =>
       val (file, _) = refFile(ctx.body)
       val ls = onProject(defn, file, _ findDefn defn)
@@ -27,7 +28,7 @@ class QueryServlet extends RPCServlet {
       })
 
     case _ => errBadRequest(s"Unknown query: ${ctx.args mkString "/"}")
-  }
+  })
 
   private def refFile (body :String) = body.split("\n") match {
     case Array(file, offset) => (file, offset.toInt)

@@ -1,0 +1,34 @@
+<html>
+  <head>
+    <title>Codex: Projects</title>
+  </head>
+  <body>
+    <p>Local Projects:</p>
+    <ul>
+      {{#locs}}
+      <li>
+        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a>
+        {{id.version}} - {{path}}
+      </li>
+      {{/locs}}
+    </ul>
+    <p>Maven Projects:</p>
+    <ul>
+      {{#m2s}}
+      <li>
+        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a> :
+        {{id.groupId}} : {{id.version}}
+      </li>
+      {{/m2s}}
+    </ul>
+    <p>Ivy Projects:</p>
+    <ul>
+      {{#ivies}}
+      <li>
+        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a> :
+        {{id.groupId}} : {{id.version}}
+      </li>
+      {{/ivies}}
+    </ul>
+  </body>
+</html>

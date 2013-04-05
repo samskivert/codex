@@ -7,9 +7,7 @@ package codex.http
 import codex.data.FqId
 import codex._
 
-class ProjectsServlet extends HtmlServlet {
-
-  override def title (ctx :Context) = "Projects"
+class ProjectsServlet extends AbstractServlet {
 
   override def process (ctx :Context) = {
     val byType = projects request(_ ids) groupBy {
@@ -17,22 +15,12 @@ class ProjectsServlet extends HtmlServlet {
       case (_, path) if (path.contains(".ivy")) => "ivy"
       case _ => "local"
     }
-    val locs = byType.get("local").toSeq flatMap (_ map locLi.tupled)
-    val m2s = byType.get("m2").toSeq flatMap(_ map artLi.tupled)
-    val ivies = byType.get("ivy").toSeq flatMap(_ map artLi.tupled)
-    <body>
-      <p>Local Projects:</p>
-      <ul>{locs}</ul>
-      <p>Maven Projects:</p>
-      <ul>{m2s}</ul>
-      <p>Ivy Projects:</p>
-      <ul>{ivies}</ul>
-    </body>
+    ctx.success(Templates.tmpl("projects.tmpl"), new AnyRef {
+      def locs = byType.get("local").toSeq flatMap (_ map Info.tupled)
+      def m2s = byType.get("m2").toSeq flatMap(_ map Info.tupled)
+      def ivies = byType.get("ivy").toSeq flatMap(_ map Info.tupled)
+    })
   }
 
-  private def href (id :FqId) :xml.Node = href(
-    id.artifactId, "/project/", id.groupId, id.artifactId, id.version)
-
-  private val locLi = (id :FqId, path :String) => <li>{href(id)} {id.version} - {path}</li>
-  private val artLi = (id :FqId, path :String) => <li>{href(id)} : {id.groupId} : {id.version}</li>
+  private case class Info (id :FqId, path :String)
 }

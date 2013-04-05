@@ -10,34 +10,35 @@ import scala.xml.{Node, NodeSeq}
 import codex._
 import codex.data.{Depend, FqId}
 
-class ProjectServlet extends HtmlServlet {
-
-  override def title (ctx :Context) = ctx.args match {
-    case Seq(gid, aid, vers) => s"$gid - $aid - $vers"
-    case _ => "Project ?"
-  }
+class ProjectServlet extends AbstractServlet {
 
   override def process (ctx :Context) = ctx.args match {
     case Seq(gid, aid, vers) =>
       val fqId = FqId(gid, aid, vers)
-      projects request(_ forId(fqId)) match {
-        case None     => <p>{s"Unknown project $fqId"}</p>
+      val data = projects request(_ forId(fqId)) match {
+        case None     => errNotFound(s"Unknown project $fqId")
         case Some(ph) => ph request { p =>
-          val acc = ListBuffer[Node]()
-          acc += <div><b>Depends:</b><br/>{toUL(p.depends)}</div>
+          val unitBuf = ListBuffer[Map[String,AnyRef]]()
           p.visit(new p.Viz {
             def onCompUnit (id :Int, path :String) {
-              if (!acc.isEmpty) acc += <br/>
-              acc += <b>{path}</b>
+              if (!_elems.isEmpty) unitBuf += Map("path" -> _curPath, "elems" -> _elems.toSeq)
+              _elems.clear()
+              _curPath = path
             }
             def onElement (id :Int, ownerId :Int, name :String, kind :String,
                            unitId :Int, offset :Int) {
-              acc += <span> {name}</span>
+              _elems += name
             }
+            private var _curPath = ""
+            private val _elems = ListBuffer[String]()
           })
-          acc
+          Map("title"   -> s"$gid - $aid - $vers",
+              "project" -> p.fqId,
+              "depends" -> p.depends,
+              "units"   -> unitBuf)
         }
       }
+      ctx.success(Templates.tmpl("project.tmpl"), data)
 
     case _ => errBadRequest(s"Invalid project id: ${ctx.args mkString "/"}")
   }
