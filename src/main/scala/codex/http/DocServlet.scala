@@ -12,73 +12,74 @@ import javax.servlet.http.HttpServlet
 import javax.servlet.http.{HttpServletRequest => HSRequest, HttpServletResponse => HSResponse}
 
 import codex._
+import codex.data.FqId
 
 /** Regurgitates documentation from local artifact repository (.m2, .ivy, etc.) */
-class DocServlet extends HttpServlet {
+class DocServlet extends AbstractServlet {
 
-  override protected def doGet  (req :HSRequest, rsp :HSResponse) = {
-    parseArgs(req) match {
-      case Array("m2", groupId, artId, vers, path @_*) =>
-        val jarpath = groupId.split("\\.").toSeq ++ Seq(artId, vers, s"$artId-$vers-javadoc.jar")
-        sendDoc(rsp, file(m2Root, jarpath :_*), path.mkString("/"))
+  override def process (ctx :Context) = ctx.args match {
+    case Seq("m2", groupId, artId, vers, path @_*) =>
+      val jarpath = groupId.split("\\.").toSeq ++ Seq(artId, vers, s"$artId-$vers-javadoc.jar")
+      sendJarDoc(ctx.rsp, file(m2Root, jarpath :_*), path.mkString("/"))
 
-      case Array("ivy", groupId, artId, vers, path @_*) =>
-        val jarpath = Seq(groupId, artId, "docs", s"$artId-$vers-javadoc.jar")
-        sendDoc(rsp, file(ivyRoot, jarpath :_*), path.mkString("/"))
+    case Seq("ivy", groupId, artId, vers, path @_*) =>
+      val jarpath = Seq(groupId, artId, "docs", s"$artId-$vers-javadoc.jar")
+      sendJarDoc(ctx.rsp, file(ivyRoot, jarpath :_*), path.mkString("/"))
 
-      case args =>
-        sendError(rsp, HSResponse.SC_BAD_REQUEST, s"Unknown doc repository ${args mkString "/"}")
+    case Seq("maven", groupId, artId, vers, path @_*) =>
+      val root = reqProjRoot(FqId(groupId, artId, vers))
+      val docpath = file(root, Seq("target", "site", "apidocs") ++ path :_*)
+      sendFileDoc(ctx.rsp, docpath)
+
+    case Seq("sbt", groupId, artId, vers, path @_*) =>
+      val root = reqProjRoot(FqId(groupId, artId, vers))
+      val docpath = file(root, Seq("target", "api") ++ path :_*)
+      sendFileDoc(ctx.rsp, docpath)
+
+    case _ => errBadRequest(s"Unknown doc repository ${ctx.args mkString "/"}")
+  }
+
+  private def reqProjRoot (fqId :FqId) = projects request(_ forId(fqId)) map(
+    _ request(_ root)) getOrElse(errNotFound(s"Unknown project $fqId"))
+
+  private def sendJarDoc (rsp :HSResponse, jar :File, path :String) {
+    if (!jar.exists) errNotFound(s"Doc jar missing: ${jar.getPath}")
+
+    def findEntry (jin :JarInputStream) :Option[JarInputStream] = try {
+      val jentry = jin.getNextJarEntry
+      if (jentry == null) None
+      else if (jentry.getName == path) Some(jin)
+      else findEntry(jin)
+    } catch {
+      case e :Throwable =>
+        jin.close
+        errInternalError(s"Error reading $jar: $e")
+    }
+
+    val jin = new JarInputStream(new FileInputStream(jar))
+    findEntry(jin) match {
+      case None => errNotFound(s"Doc jar does not contain: $path")
+      case Some(jin) =>
+        rsp.setContentType(getServletContext.getMimeType(path))
+        val buf = ByteBuffer.allocate(4*1024)
+        val source = Channels.newChannel(jin)
+        val dest = Channels.newChannel(rsp.getOutputStream)
+        while (source.read(buf) != -1) {
+          buf.flip()
+          while (buf.hasRemaining()) dest.write(buf)
+          buf.clear()
+        }
+        source.close()
     }
   }
 
-  private def sendError (rsp :HSResponse, code :Int, msg :String) {
-    rsp.setStatus(code)
-    rsp.setContentType("text/plain; charset=UTF-8")
-    rsp.getOutputStream.write(msg.getBytes("UTF8"))
-  }
-
-  private def sendDoc (rsp :HSResponse, jar :File, path :String) {
-    if (!jar.exists) {
-      sendError(rsp, HSResponse.SC_NOT_FOUND, s"Doc jar missing: ${jar.getPath}")
-
-    } else {
-      def findEntry (jin :JarInputStream) :Option[JarInputStream] = {
-        val jentry = jin.getNextJarEntry
-        if (jentry == null) None
-        else if (jentry.getName == path) Some(jin)
-        else findEntry(jin)
-      }
-
-      val jin = new JarInputStream(new FileInputStream(jar))
-      val entry = try findEntry(jin) catch {
-        case e :Throwable =>
-          sendError(rsp, HSResponse.SC_INTERNAL_SERVER_ERROR, s"Error reading $jar: $e")
-          jin.close
-          None
-      }
-      entry match {
-        case None => sendError(rsp, HSResponse.SC_NOT_FOUND, s"Doc jar does not contain: $path")
-        case Some(jin) =>
-          rsp.setContentType(getServletContext.getMimeType(path))
-          val buf = ByteBuffer.allocate(4*1024)
-          val source = Channels.newChannel(jin)
-          val dest = Channels.newChannel(rsp.getOutputStream)
-          while (source.read(buf) != -1) {
-            buf.flip()
-            while (buf.hasRemaining()) dest.write(buf)
-            buf.clear()
-          }
-          source.close()
-      }
-    }
-  }
-
-  private def parseArgs (req :HSRequest) = {
-    def deNull (s :String) = if (s == null) "" else s
-    (deNull(req.getServletPath) + deNull(req.getPathInfo)) match {
-      case ""   => Array[String]()
-      case info => info.dropWhile(_ == '/').split("/").dropWhile(_ == "")
-    }
+  private def sendFileDoc (rsp :HSResponse, file :File) {
+    rsp.setContentType(getServletContext.getMimeType(file.getName))
+    val buf = ByteBuffer.allocate(4*1024)
+    val source = new FileInputStream(file).getChannel
+    try {
+      source.transferTo(0, Long.MaxValue, Channels.newChannel(rsp.getOutputStream))
+    } finally source.close()
   }
 
   private val m2Root = file(home, ".m2", "repository")
