@@ -171,8 +171,13 @@ object ProjectModel {
       log.info(s"Downloading $url...")
       val uconn = url.openConnection.asInstanceOf[HttpURLConnection]
       uconn.getResponseCode match {
-        case 200 => new FileOutputStream(artifact(cfier)).getChannel transferFrom(
-          Channels.newChannel(uconn.getInputStream), 0, Long.MaxValue)
+        case 200 =>
+          val out = new FileOutputStream(artifact(cfier)).getChannel
+          try {
+            val in = Channels.newChannel(uconn.getInputStream)
+            try out.transferFrom(in, 0, Long.MaxValue)
+            finally in.close()
+          } finally out.close()
         case code => log.info(s"Download failed: $code")
       }
     }
