@@ -5,9 +5,10 @@
 package codex.http
 
 import java.io.File
+import samscala.nexus.Handle
 
 import codex._
-import codex.data.{Loc, Kinds, Project, Projects}
+import codex.data.{FqId, Loc, Kinds, Project, Projects}
 import codex.extract.Import
 
 class QueryServlet extends AbstractServlet {
@@ -29,17 +30,17 @@ class QueryServlet extends AbstractServlet {
       // TODO: URL encode the path so that it's just one element (so as to work on non-Unix
       // platforms... blah)
       val path = "/" + rest.mkString(File.separator)
-      val ls = onProject(defn, path, _ findDefn(defn, Kinds.types, _ fordoc))
-      // fire off a request for these projects to download their docs if they don't have 'em
-      (Set() ++ ls map(_._1.projId)) foreach { pid =>
-        projects request(_ forId(pid) map(_ invoke(_ checkdoc()))) }
-      // and deliver the results based on whether we got 0, 1, or many matches
-      ls match {
-        case Seq() => errNotFound(s"Found no element $defn")
-        case Seq((l, fqNm, path)) => ctx.rsp.sendRedirect(path)
-        case _     => ctx.success(Templates.tmpl("docs.tmpl"),
-                                  Map("name" -> defn, "matches" -> ls))
-      }
+      docQuery(ctx, reqProject(path), defn)
+
+    case Seq("doc", grpId, artId, vers) => ctx.params get("q") match {
+      case None        => errBadRequest("Missing query parameter 'q'")
+      case Some(query) =>
+        val fqId = FqId(grpId, artId, vers)
+        projects request(_ forId(fqId)) match {
+          case Some(ph) => docQuery(ctx, ph, query)
+          case None => errNotFound(s"Unable to determine project for $fqId")
+        }
+    }
 
     case _ => errBadRequest(s"Unknown query: ${ctx.args mkString "/"}")
   }
@@ -53,10 +54,25 @@ class QueryServlet extends AbstractServlet {
     case _ => errBadRequest("Request missing path and (optional) offset.")
   }
 
-  private def onProject[R] (defn :String, path :String, f :(Project => R)) :R = {
-    projects request (_ forPath path) match {
-      case Some(p) => p request f
-      case None => errNotFound(s"Unable to determine project for $path")
+  private def reqProject (path :String) = projects request (_ forPath path) match {
+    case Some(p) => p
+    case None    => errNotFound(s"Unable to determine project for $path")
+  }
+
+  private def onProject[R] (defn :String, path :String, f :(Project => R)) :R =
+    reqProject(path) request f
+
+  private def docQuery (ctx :Context, ph :Handle[Project], defn :String) {
+    val ls = ph request(_ findDefn(defn, Kinds.types, _ fordoc))
+    // fire off a request for these projects to download their docs if they don't have 'em
+    (Set() ++ ls map(_._1.projId)) foreach { pid =>
+      projects request(_ forId(pid) map(_ invoke(_ checkdoc()))) }
+    // and deliver the results based on whether we got 0, 1, or many matches
+    ls match {
+      case Seq() => errNotFound(s"Found no element $defn")
+      case Seq((l, fqNm, path)) => ctx.rsp.sendRedirect(path)
+      case _     => ctx.success(Templates.tmpl("docs.tmpl"),
+                                Map("name" -> defn, "matches" -> ls))
     }
   }
 }

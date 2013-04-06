@@ -3,15 +3,21 @@
     <title>Codex: Projects</title>
   </head>
   <body>
-    <p>Local Projects:</p>
-    <ul>
+    <h3>Local Projects:</h3>
+    <table>
       {{#locs}}
-      <li>
-        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a>
-        {{id.version}} - {{path}}
-      </li>
+      <form action="/query/doc/{{id.groupId}}/{{id.artifactId}}/{{id.version}}"/>
+        <tr>
+          <td align="right">
+            <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a>
+          </td>
+          <td><input type="text" name="q"/></td>
+          <td>{{id.version}}</td>
+          <td>{{path}}</td>
+        </tr>
+      </form>
       {{/locs}}
-    </ul>
+    </table>
     <p>Maven Projects:</p>
     <ul>
       {{#m2s}}
