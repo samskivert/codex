@@ -37,8 +37,7 @@ class HttpServer extends Server(config.httpPort) {
     ctx.addServlet(new ServletHolder(new QueryServlet), "/query/*")
     ctx.addServlet(new ServletHolder(new ProjectsServlet), "/projects/*")
     ctx.addServlet(new ServletHolder(new ProjectServlet), "/project/*")
-    ctx.addServlet(new ServletHolder(new DocServlet), "/m2/*")
-    ctx.addServlet(new ServletHolder(new DocServlet), "/ivy/*")
+    ctx.addServlet(new ServletHolder(new DocServlet), "/doc/*")
     // ctx.addServlet(new ServletHolder(new DefaultServlet), "/*")
 
     // // if there's another Codex running, tell it to step aside

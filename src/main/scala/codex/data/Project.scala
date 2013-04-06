@@ -44,7 +44,7 @@ class Project(
   /** Returns all definitions in this project's extent with the specified name.
     *
     * @param name the name of the definition. If the name is all lower case, a case insensitive
-    * match is performed, otherwise a case sensitive match is used. (TODO)
+    * match is performed, otherwise a case sensitive match is used.
     * @param kinds a restriction on the kinds of definitions that will be returned. If empty, all
     * kinds will be returned.
     */
@@ -86,7 +86,7 @@ class Project(
       case "object" => docurl + "$"
       case _ => docurl
     }
-    (loc, cs.mkString("."), s"/$flavor/$groupId/$artifactId/$version/$hackurl.html")
+    (loc, cs.mkString("."), s"/doc/$flavor/$groupId/$artifactId/$version/$hackurl.html")
   }
 
   /** Requests that this project attempt to download its doc jar if it's never done so. */
