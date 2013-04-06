@@ -38,6 +38,7 @@ class ProjectServlet extends AbstractServlet {
           if (rest contains "reindex") p.reindex()
           Map("title"   -> s"$gid - $aid - $vers",
               "project" -> p.fqId,
+              "flavor"  -> p.flavor,
               "indexed" -> _fmt.format(new Date(p.lastIndexed)),
               "depends" -> p.depends,
               "units"   -> unitBuf)
