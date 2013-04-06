@@ -29,6 +29,8 @@ abstract class AbstractServlet extends HttpServlet {
     def rsp :HSResponse
     /** The body of the request, converted to a string. */
     def body :String
+    /** The GET query parameters for this request. */
+    def params :Map[String,String]
 
     /** Sends the supplied `text/plain` HTTP response. */
     def success (result :String) {
@@ -80,6 +82,14 @@ abstract class AbstractServlet extends HttpServlet {
     val rsp  :HSResponse
   ) extends Context {
     lazy val body = Source.fromInputStream(req.getInputStream)(reqCodec).mkString
+    lazy val params = req.getQueryString match {
+      case null => Map[String,String]()
+      case params => params.split("&") map { p => p.indexOf("=") match {
+        case  -1 => (p, "")
+        case idx => (p.substring(0, idx), p.substring(idx+1))
+      }} toMap
+    }
+
 
     private def reqCodec :Codec = req.getCharacterEncoding match {
       case null => Codec.UTF8
