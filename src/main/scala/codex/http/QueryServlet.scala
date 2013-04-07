@@ -32,15 +32,13 @@ class QueryServlet extends AbstractServlet {
       val path = "/" + rest.mkString(File.separator)
       docQuery(ctx, reqProject(path), defn)
 
-    case Seq("doc", grpId, artId, vers) => ctx.params get("q") match {
-      case None        => errBadRequest("Missing query parameter 'q'")
-      case Some(query) =>
-        val fqId = FqId(grpId, artId, vers)
-        projects request(_ forId(fqId)) match {
-          case Some(ph) => docQuery(ctx, ph, query)
-          case None => errNotFound(s"Unable to determine project for $fqId")
-        }
-    }
+    case Seq("doc", grpId, artId, vers) =>
+      val query = ctx.reqParam("q")
+      val fqId = FqId(grpId, artId, vers)
+      projects request(_ forId(fqId)) match {
+        case Some(ph) => docQuery(ctx, ph, query)
+        case None => errNotFound(s"Unable to determine project for $fqId")
+      }
 
     case _ => errBadRequest(s"Unknown query: ${ctx.args mkString "/"}")
   }

@@ -32,6 +32,12 @@ abstract class AbstractServlet extends HttpServlet {
     /** The GET query parameters for this request. */
     def params :Map[String,String]
 
+    /** Returns query parameter `name`, fails with BAD_REQUEST if missing. */
+    def reqParam (name :String) = params.get(name) match {
+      case None        => errBadRequest(s"Missing param '$name'.")
+      case Some(value) => value
+    }
+
     /** Sends the supplied `text/plain` HTTP response. */
     def success (result :String) {
       rsp.setContentType("text/plain; charset=UTF-8")
