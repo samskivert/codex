@@ -20,7 +20,7 @@ class Projects extends Entity {
 
   /** Returns (creating if necessary) the project that contains the supplied comp unit. */
   def forPath (path :String) :Option[Handle[Project]] = _byPath collectFirst {
-    case (root, p) if (path startsWith root) => p
+    case (root, p) if (path startsWith(root + File.separator)) => p
   } orElse (findRoot(new File(path)) flatMap ProjectModel.forRoot map createProject)
 
   /** Returns (creating if necessary) the project for the specified dependency. */
@@ -35,15 +35,57 @@ class Projects extends Entity {
     projects map(p => (p.fqId, p.rootPath))
   }
 
+  /** Deletes the project with the specified `fqId`. */
+  def delete (fqId :FqId) {
+    _byFqId remove(fqId) match {
+      case None => log.warning("Can't delete unknown project", "fqId", fqId)
+      case Some(ph) =>
+        val (id, path) = ph request(p => (p.id, p.rootPath))
+        _byPath -= path
+        using(_session) { projects delete(id) }
+        ph invoke(_.delete())
+    }
+  }
+
   // a backdoor to give projects easy access to their entity handle
   private[data] def handle (fqId :FqId) = _byFqId(fqId)
 
   private def createProject (pm :ProjectModel) = using(_session) {
+    // if we already have a project with this fqId, we either need to usurp it, or take a back seat
+    // to it; in the former case, we mutate the existing project's version and take the "stock"
+    // version for ourselves, in the latter case we just register ourselves with a mutated version
+    val stockFqId = FqId(pm.groupId, pm.artifactId, pm.version)
+    val fqId = _byFqId get(stockFqId) match {
+      case None => stockFqId
+      case Some(ph) =>
+        // if we're local and the other project is remote; delete the other project
+        val (otherRemote, otherRoot) = ph request(p => (p.isRemote, p.rootPath))
+        if (otherRemote && !pm.isRemote) {
+          log.info(s"Usurping remote $stockFqId with local", "usurper", pm.root)
+          delete(stockFqId)
+          stockFqId
+        }
+        // else we're both local, so tack a conflict resolving suffix onto our version
+        else {
+          var suff = 1
+          var newFqId = stockFqId dedupe(suff)
+          while (_byFqId contains(newFqId)) {
+            suff += 1
+            newFqId = stockFqId dedupe(suff)
+          }
+          log.info(s"Assigned $newFqId to conflicting project",
+                   "have", otherRoot, "conflicter", pm.root)
+          newFqId
+        }
+        // currently, it's not possible for us both to be remote, because we always find an
+        // existing remote depend when looking for a depend by fqId (the only way new remote
+        // depends are ever created)
+    }
     val p = projects insert new Project(
       name          = pm.name,
-      groupId       = pm.groupId,
-      artifactId    = pm.artifactId,
-      version       = pm.version,
+      groupId       = fqId.groupId,
+      artifactId    = fqId.artifactId,
+      version       = fqId.version,
       flavor        = pm.flavor,
       imported      = System.currentTimeMillis,
       rootPath      = pm.root.getAbsolutePath)

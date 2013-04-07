@@ -8,5 +8,9 @@ package codex.data
   * `groupId`, `artifactId` and `version`.
   */
 case class FqId (groupId :String, artifactId :String, version :String) {
+
+  /** Creates a copy of this FqId with `suff` tacked onto its version. */
+  def dedupe (suff :Int) = copy(version = s"$version-$suff")
+
   override def toString = groupId + ":" + artifactId + ":" + version
 }

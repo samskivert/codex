@@ -15,11 +15,19 @@ import codex.data.{Depend, FqId}
 class ProjectServlet extends AbstractServlet {
 
   override def process (ctx :Context) = ctx.args match {
+    case Seq(gid, aid, vers, "delete") =>
+      val fqId = FqId(gid, aid, vers)
+      projects invoke(_ delete(fqId))
+      ctx.rsp.sendRedirect("/projects")
+
     case Seq(gid, aid, vers, rest @ _*) =>
       val fqId = FqId(gid, aid, vers)
       val data = projects request(_ forId(fqId)) match {
         case None     => errNotFound(s"Unknown project $fqId")
         case Some(ph) => ph request { p =>
+          // force a reindex if requested
+          if (rest contains "reindex") p.reindex()
+
           val unitBuf = ListBuffer[Map[String,AnyRef]]()
           p.visit(new p.Viz {
             def onCompUnit (id :Int, path :String) {
@@ -28,16 +36,12 @@ class ProjectServlet extends AbstractServlet {
               _curPath = path
             }
             def onElement (id :Int, ownerId :Int, name :String, kind :String,
-                           unitId :Int, offset :Int) {
-              _elems += name
-            }
+                           unitId :Int, offset :Int) { _elems += name }
             private var _curPath = ""
             private val _elems = ListBuffer[String]()
           })
-          // force a reindex if requested
-          if (rest contains "reindex") p.reindex()
           Map("title"   -> s"$gid - $aid - $vers",
-              "project" -> p.fqId,
+              "proj" -> p.fqId,
               "flavor"  -> p.flavor,
               "indexed" -> _fmt.format(new Date(p.lastIndexed)),
               "depends" -> p.depends,

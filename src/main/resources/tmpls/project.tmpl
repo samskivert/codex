@@ -4,13 +4,15 @@
   </head>
   <body>
     <div>
-      <h2>{{project.artifactId}}</h2>
+      <h2>{{proj.artifactId}}</h2>
 
       <p>
-        <b>Organization:</b> {{project.groupId}}<br/>
-        <b>Version:</b> {{project.version}}<br/>
+        <b>Organization:</b> {{proj.groupId}}<br/>
+        <b>Version:</b> {{proj.version}}<br/>
         <b>Flavor:</b> {{flavor}}<br/>
         <b>Last indexed:</b> {{indexed}}<br/>
+        <a href="/project/{{proj.groupId}}/{{proj.artifactId}}/{{proj.version}}/delete">
+          [delete]</a><br/>
       </p>
 
       <b>Depends:</b><br/>

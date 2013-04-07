@@ -4,7 +4,7 @@
 
 package codex.data
 
-import java.io.File
+import java.io.{File, IOException}
 import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
@@ -40,6 +40,22 @@ class Project(
 
   /** This project's fully qualified (aka Maven) id, or some approximation thereof. */
   lazy val fqId = FqId(groupId, artifactId, version)
+
+  /** Returns whether this project is local or remote. See [[ProjectModel.isRemote]]. */
+  def isRemote = _model.isRemote
+
+  /** Returns this project's complete transitive dependency set. */
+  def depends :Seq[Depend] = using(_session) { dependsT.toList }
+
+  /** Returns the time at which this project was last indexed. */
+  def lastIndexed = {
+    if (_lastIndexed == 0L) {
+      val dbfile = file(_metaDir, "project.h2.db")
+      if (dbfile.exists) _lastIndexed = dbfile.lastModified
+    }
+    _lastIndexed
+  }
+  private var _lastIndexed = 0L
 
   /** Returns all definitions in this project's extent with the specified name.
     *
@@ -89,16 +105,6 @@ class Project(
     (loc, cs.mkString("."), s"/doc/$flavor/$groupId/$artifactId/$version/$hackurl.html")
   }
 
-  /** Requests that this project attempt to download its doc jar if it's never done so. */
-  def checkdoc () {
-    // TODO: who should be responsible for not repeatedly attempting to download non-existent docs?
-    // maybe have the project model do it?
-    if (!_model.hasDocs) {
-      log.info("Trying docgen for checkdoc", "proj", fqId)
-      _model.tryGenerateDocs()
-    }
-  }
-
   /** Used by [[visit]] to visit all comp units and elements in this project. */
   trait Viz {
     def onCompUnit (id :Int, path :String)
@@ -121,8 +127,15 @@ class Project(
     }
   }
 
-  /** Returns this project's complete transitive dependency set. */
-  def depends :Seq[Depend] = using(_session) { dependsT.toList }
+  /** Requests that this project attempt to download its doc jar if it's never done so. */
+  def checkdoc () {
+    // TODO: who should be responsible for not repeatedly attempting to download non-existent docs?
+    // maybe have the project model do it?
+    if (!_model.hasDocs) {
+      log.info("Trying docgen for checkdoc", "proj", fqId)
+      _model.tryGenerateDocs()
+    }
+  }
 
   /** Rebuilds this project's indices. */
   def reindex () = using(_session) {
@@ -143,15 +156,30 @@ class Project(
     // TODO: write this to a file or something? or just use last mod time on database file?
   }
 
-  /** Returns the time at which this project was last indexed. */
-  def lastIndexed = {
-    if (_lastIndexed == 0L) {
-      val dbfile = file(_metaDir, "project.h2.db")
-      if (dbfile.exists) _lastIndexed = dbfile.lastModified
-    }
-    _lastIndexed
+  private[data] def delete () {
+    log.info(s"Deleting project metadata: ${_metaDir}")
+    // close our database session
+    _session.close
+    // recursively delete metadir
+    import java.nio.file._
+    Files.walkFileTree(_metaDir.toPath, new SimpleFileVisitor[Path] {
+      override def visitFile (file :Path, attrs :java.nio.file.attribute.BasicFileAttributes) = {
+        Files.delete(file)
+        FileVisitResult.CONTINUE
+      }
+      override def visitFileFailed (file :Path, ex :IOException) = {
+        Files.delete(file)
+        FileVisitResult.CONTINUE
+      }
+      override def postVisitDirectory (dir :Path, ex :IOException) = {
+        if (ex != null) throw ex
+        else {
+          Files.delete(dir)
+          FileVisitResult.CONTINUE
+        }
+      }
+    })
   }
-  private var _lastIndexed = 0L
 
   private def reindexIfNeeded () {
     if (_model.needsReindex(lastIndexed)) reindex()
@@ -233,7 +261,7 @@ class Project(
     dir
   }
 
-  // defer opening of our database until we need it; thousands of project objects are created at
+  // defer opening of our database until we need it; thousands of project objects may be created at
   // app startup time, but not that many of them will actually get queried
   private lazy val _session = {
     val sess = DB.session(_metaDir, "project", ProjectDB, 1)
