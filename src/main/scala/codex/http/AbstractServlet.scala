@@ -5,6 +5,7 @@
 package codex.http
 
 import com.samskivert.mustache.Template
+import java.net.URLDecoder
 import javax.servlet.http.HttpServlet
 import javax.servlet.http.{HttpServletRequest => HSRequest, HttpServletResponse => HSResponse}
 import scala.io.{Codec, Source}
@@ -92,7 +93,7 @@ abstract class AbstractServlet extends HttpServlet {
       case null => Map[String,String]()
       case params => params.split("&") map { p => p.indexOf("=") match {
         case  -1 => (p, "")
-        case idx => (p.substring(0, idx), p.substring(idx+1))
+        case idx => (p.substring(0, idx), URLDecoder.decode(p.substring(idx+1)))
       }} toMap
     }
 
