@@ -36,10 +36,10 @@ You can download an installer for Codex here:
   * Windows: TODO
 
 Codex is a standalone application which is run via [Getdown], an auto-updating Java app launcher.
-When Codex is running, you should see a C in your system tray which you can use quit Codex and
-easily open a web browser to view Codex's known-projects page.
+When Codex is running, you should see a C in your system tray which you can use to quit Codex and
+to easily open a web browser viewing Codex's known-projects page.
 
-Normally you don't interact with Codex via the web interface, but rather via editor integration.
+Normally you don't interact with Codex via the web interface, rather via editor integration.
 However, you can do documentation searches via the web interface, which can be useful if you're not
 currently editing a file in a particular project and want to look up documentation in that project
 or its dependencies.
@@ -48,15 +48,13 @@ or its dependencies.
 
 Codex comes with Emacs integration out of the box, just add the following to `.emacs`:
 
-    (add-to-list 'load-path "CODEXDIR/elisp")
+    (add-to-list 'load-path "~/projects/codex/src/main/elisp")
     (autoload 'codex-mode "codex-mode" "Minor mode for augmenting coding modes." t)
-    (mapc
-     (lambda (lang-hook)
-       (add-hook lang-hook 'codex-mode))
-     '(java-mode-hook
-       scala-mode-hook
-       actionscript-mode-hook
-       csharp-mode-hook))
+    (mapc (lambda (lang-hook) (add-hook lang-hook 'codex-mode))
+          '(java-mode-hook
+            scala-mode-hook
+            actionscript-mode-hook
+            csharp-mode-hook))
 
 Where `CODEXDIR/elisp` depends on your platform:
 
