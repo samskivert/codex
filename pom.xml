@@ -61,6 +61,13 @@
       <version>1.2.127</version>
     </dependency>
 
+    <!-- included here so we can copy it into our getdown build -->
+    <dependency>
+      <groupId>com.threerings</groupId>
+      <artifactId>getdown</artifactId>
+      <version>1.3</version>
+    </dependency>
+
     <dependency>
       <groupId>org.scala-lang</groupId>
       <artifactId>scala-library</artifactId>
