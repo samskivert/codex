@@ -34,10 +34,55 @@ object Codex {
 
     httpServer.init()  // prepare the web server for operation
     startSig.emit()    // init our various thingamabobs
+    initTray()         // wire up our system tray icon
     httpServer.start() // start listening for requests
     log.info("Codex listening on http://localhost:" + config.httpPort)
     httpServer.join()  // wait for the web server to exit
     exec.awaitTermination(60, TimeUnit.SECONDS) // wait for the exec pool to drain
     log.info("Codex exiting...")
+    sys.exit(0) // annoyingly we have to force exit here due to AWT bullshit
+  }
+
+  def initTray () {
+    import java.awt.event.{ActionEvent, ActionListener}
+    import java.awt.image.BufferedImage
+    import java.awt.{Desktop, MenuItem, PopupMenu, SystemTray, TrayIcon, Window}
+    import java.net.URL
+    import javax.imageio.ImageIO
+
+    def newMenuItem (label :String, action : => Unit) = {
+      val item = new MenuItem(label)
+      item.addActionListener(new ActionListener {
+        def actionPerformed (e :ActionEvent) = action
+      })
+      item
+    }
+
+    if (!SystemTray.isSupported) log.info("System tray not supported. No tray icon for you!")
+    else {
+      try {
+        val popup = new PopupMenu
+        popup.add(newMenuItem("Show projects...", {
+          Desktop.getDesktop.browse(new URL("http://localhost:3003/projects").toURI)
+        }))
+        popup.add(newMenuItem("Quit", shutdownSig.emit()))
+
+        val icon = ImageIO.read(getClass.getClassLoader.getResource("images/trayicon.png"))
+        val size = SystemTray.getSystemTray.getTrayIconSize
+        println(s"Tray size $size")
+        val image = new BufferedImage(size.width, size.height, BufferedImage.TYPE_INT_ARGB)
+        val gfx = image.createGraphics
+        gfx.drawImage(icon, (size.width - icon.getWidth)/2,
+                      (size.height - icon.getHeight)/2, null)
+        gfx.dispose
+
+        val tricon = new TrayIcon(image, "Codex", popup)
+        shutdownSig onEmit { SystemTray.getSystemTray.remove(tricon) }
+        SystemTray.getSystemTray.add(tricon)
+
+      } catch {
+        case e :Exception => log.warning("Failed to initialize tray icon: " + e)
+      }
+    }
   }
 }
