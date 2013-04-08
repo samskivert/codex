@@ -12,13 +12,12 @@ import codex.data.Depend
 
 /** Utilities for interacting with SBT. */
 object SBT {
-  import scala.sys.process._
 
   /** Extracts settings named in `props` from an SBT project in `cwd`. */
   def extractProps (cwd :File, props :String*) :Map[String,String] = {
     // TODO: this is a fragile hack
     def trimfo (line :String) = line.substring(line.indexOf(" ")+1)
-    val lines = Process(Seq("sbt", "-no-colors") ++ props, cwd).lines takeRight(
+    val lines = Shell.shell(cwd, Seq("sbt", "-no-colors") ++ props :_*).lines takeRight(
       props.size) map(trimfo)
     (Map[String,String]() /: (props zip lines))(_ + _)
   }
@@ -29,7 +28,7 @@ object SBT {
 
   /** Invokes `sbt doc` in `root` with the aim of generating javadocs. */
   def buildDocs (root :File) {
-    Process(Seq("sbt", "doc"), root) !
+    Shell.shell(root, "sbt", "doc") !
   }
 
   private def stripPrePost (s :String) = s.indexOf(")") match {
