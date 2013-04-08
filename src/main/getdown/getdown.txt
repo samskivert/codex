@@ -22,6 +22,7 @@ resource = getdown-new.jar
 
 # Non-code resources
 resource = background.png
+resource = elisp/codex-mode.el
 
 # Parameters passed to the JVM
 jvmarg = -mx512M

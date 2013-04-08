@@ -22,6 +22,9 @@ object CodexBuild extends Build {
     copy((srcDir / "getdown" * "*").get)
     // copy our non-proguarded libs
     copy(passLibs)
+    // copy our elisp files
+    IO.copy((srcDir / "elisp" * "*").get.map(src => (src.asFile, dest / "elisp" / src.getName)))
+
     // copy our proguarded code jar
     IO.copy(Seq((minJarPath, dest / "codex.jar")))
     // add a copy of getdown as getdown-new.jar
