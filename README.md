@@ -27,7 +27,49 @@ information (if available) to deliver relevant results.
 Codex aims to extract and make available the inline documentation from your code as well.
 Documentation is occasionally sufficiently relevant and correct to be useful.
 
+## Running Codex
+
+You can download an installer for Codex here:
+
+  * Mac: [Codex-1.0.dmg](http://samskivert.com/codex/Codex-1.0.dmg)
+  * Linux: TODO
+  * Windows: TODO
+
+Codex is a standalone application which is run via [Getdown], an auto-updating Java app launcher.
+When Codex is running, you should see a C in your system tray which you can use quit Codex and
+easily open a web browser to view Codex's known-projects page.
+
+Normally you don't interact with Codex via the web interface, but rather via editor integration.
+However, you can do documentation searches via the web interface, which can be useful if you're not
+currently editing a file in a particular project and want to look up documentation in that project
+or its dependencies.
+
+## Editor Integration
+
+Codex comes with Emacs integration out of the box, just add the following to `.emacs`:
+
+    (add-to-list 'load-path "CODEXDIR/elisp")
+    (autoload 'codex-mode "codex-mode" "Minor mode for augmenting coding modes." t)
+    (mapc
+     (lambda (lang-hook)
+       (add-hook lang-hook 'codex-mode))
+     '(java-mode-hook
+       scala-mode-hook
+       actionscript-mode-hook
+       csharp-mode-hook))
+
+Where `CODEXDIR/elisp` depends on your platform:
+
+  * Mac: `~/Library/Application Support/Codex/elisp`
+  * Linux: TODO
+  * Windows: TODO
+
+Use `M-x describe-minor-mode codex-mode` to view the default key mappings, and customize to taste.
+
 ## Status
 
-Codex is just getting started, though I am stealing and repurposing code from numerous related
-projects that I've written over the years, so it should hopefully start delivering value quickly.
+Codex currently does a passable job of grokking Java, Scala, C# and ActionScript code. It
+understands projects managed by Maven and SBT. It can locate and serve up documentation from Maven
+and Ivy repositories, and auto-download missing docs from Maven Central.
+
+[Getdown]: https://code.google.com/p/getdown/
