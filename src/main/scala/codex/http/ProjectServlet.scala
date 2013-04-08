@@ -7,7 +7,6 @@ package codex.http
 import java.text.DateFormat
 import java.util.Date
 import scala.collection.mutable.ListBuffer
-import scala.xml.{Node, NodeSeq}
 
 import codex._
 import codex.data.{Depend, FqId}
