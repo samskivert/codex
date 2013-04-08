@@ -143,7 +143,9 @@ the mode, `toggle' toggles the state.
 
 When Codex mode is enabled, key bindings are enabled that make
 requests of the Codex daemon allowing one to, for example,
-navigate to a definition or insert an import for a class."
+navigate to a definition or insert an import for a class.
+
+\\{codex-mode-map}"
   ;; The initial value.
   :init-value nil
   ;; The indicator for the mode line.
