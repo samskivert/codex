@@ -1,0 +1,14 @@
+#!/bin/sh
+
+APPDIR=`dirname $0 | sed 's:Contents/MacOS::'`
+
+ROOT="$HOME/Library/Application Support/Codex"
+mkdir -p "$ROOT"
+
+# copy some bootstrap resources into place if needed
+if [ ! -f "$ROOT/getdown.txt" ]; then
+    cp $APPDIR/Contents/Resources/Java/* "$ROOT"
+fi
+
+cd "$ROOT"
+java -jar getdown.jar .
