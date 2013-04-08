@@ -4,7 +4,7 @@
 
 package codex
 
-import java.io.File
+import java.io.{FileOutputStream, PrintStream}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import samscala.react.Signal
 import sun.misc.{Signal => SSignal, SignalHandler}
@@ -13,6 +13,8 @@ import codex.http.HttpServer
 
 /** The main entry point of the Codex app. */
 object Codex {
+
+  val appdir = Option(System.getProperty("appdir")) map(file(_))
 
   def main (args :Array[String]) {
     // register a signal handler to shutdown gracefully on ctrl-c
@@ -32,9 +34,31 @@ object Codex {
       exec.shutdown() // shutdown our executor service
     }
 
+    // if we're running as a Getdown app, wire up our system tray icon
+    if (appdir.isDefined) initTray()
+
+    // if we're running via Getdown, redirect our log output to a file
+    appdir foreach { ad =>
+      // first delete any previous previous log file
+      val olog = file(ad, "old-codex.log")
+      if (olog.exists) olog.delete
+
+      // next rename the previous log file
+      val nlog = file(ad, "codex.log")
+      if (nlog.exists) nlog.renameTo(olog)
+
+      // and now redirect our output
+      try {
+        val logOut = new PrintStream(new FileOutputStream(nlog), true)
+        System.setOut(logOut)
+        System.setErr(logOut)
+      } catch {
+        case e :Exception => log.warning("Failed to open debug log", "path", nlog, "error", e)
+      }
+    }
+
     httpServer.init()  // prepare the web server for operation
     startSig.emit()    // init our various thingamabobs
-    initTray()         // wire up our system tray icon
     httpServer.start() // start listening for requests
     log.info("Codex listening on http://localhost:" + config.httpPort)
     httpServer.join()  // wait for the web server to exit
