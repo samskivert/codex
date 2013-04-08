@@ -4,12 +4,11 @@
 
 package codex.data
 
-import java.io.{File, FileWriter, PrintWriter}
+import java.io.File
 import java.sql.DriverManager
 import org.squeryl.PrimitiveTypeMode._
 import org.squeryl.adapters.H2Adapter
 import org.squeryl.{Schema, Session}
-import scala.io.Source
 
 import codex._
 
@@ -31,10 +30,7 @@ object DB {
 
     // read the DB version file
     val vfile = file(root, name + ".vers")
-    val fileVers = try Source.fromFile(vfile).getLines.next.toInt
-    catch {
-      case e :Throwable => 0
-    }
+    val fileVers = Util.fileToInt(vfile)
     if (codeVers < fileVers) {
       log.warning("DB on file system is higher version than code? Beware.",
                   "file", fileVers, "code", codeVers)
@@ -46,11 +42,7 @@ object DB {
     val sess = Session.create(DriverManager.getConnection(dburl, "sa", ""), new H2Adapter)
     // sess.setLogger(dblogger)
 
-    def writeVersion (version :Int) {
-      val out = new PrintWriter(new FileWriter(vfile))
-      out.println(version)
-      out.close
-    }
+    def writeVersion (version :Int) = Util.intToFile(vfile, version)
 
     // if we have no version string, we need to initialize the database
     if (fileVers < 1) {
