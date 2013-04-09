@@ -87,7 +87,7 @@ object Codex {
       try {
         val popup = new PopupMenu
         popup.add(newMenuItem("Show projects...", {
-          Desktop.getDesktop.browse(new URL("http://localhost:3003/projects").toURI)
+          Desktop.getDesktop.browse(config.codexURL("projects").toURI)
         }))
         popup.add(newMenuItem("Quit", shutdownSig.emit()))
 

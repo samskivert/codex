@@ -3,6 +3,7 @@
 // http://github.com/samskivert/codex
 
 import java.io.{File, FileReader}
+import java.net.URL
 import java.util.Properties
 import java.util.concurrent.Executors
 import samscala.nexus.entity
@@ -19,6 +20,9 @@ package object codex {
 
     /** The number of threads used to grindy grindy. */
     def threadPoolSize :Int = _props.getProperty("thread_pool_size", "4").toInt
+
+    /** Returns a URL for the supplied Codex resource. */
+    def codexURL (path :String) = new URL(s"http://localhost:$httpPort/$path")
 
     private val _props = {
       val p = new Properties
