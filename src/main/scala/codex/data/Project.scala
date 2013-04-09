@@ -181,6 +181,7 @@ class Project(
   }
 
   private def reindexIfNeeded () {
+    // TODO: don't do this more than once a minute or so?
     if (_model.needsReindex(lastIndexed)) reindex()
   }
 

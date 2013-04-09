@@ -50,8 +50,12 @@ abstract class ProjectModel (
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */
   def needsReindex (lastIndexed :Long) =
-    // default is not super smart but is a good basis for non-local projects
-    (sourceDir.lastModified > lastIndexed || testSourceDir.lastModified > lastIndexed)
+    haveNewerDir(lastIndexed)(sourceDir) || haveNewerDir(lastIndexed)(testSourceDir)
+
+  protected def haveNewerDir(lastIndexed :Long)(dir :File) :Boolean = {
+    if (dir.lastModified > lastIndexed) true
+    else dir.listFiles filter(_.isDirectory) exists(haveNewerDir(lastIndexed))
+  }
 
   /** Creates a file, relative to the project root, with the supplied path components. */
   protected def file (comps :String*) = codex.file(root, comps :_*)
@@ -90,12 +94,12 @@ object ProjectModel {
     override def version    = "unknown"
 
     override def sourceDir = {
-      val options = Seq(file("src", "main"), file("src"))
-      options find(_.isDirectory) getOrElse(root)
+      val options = Seq(file("src", "main"))
+      options find(_.isDirectory) getOrElse(file("src"))
     }
     override def testSourceDir = {
-      val options = Seq(file("test"), file("src", "test"), file("tests"), file("src", "tests"))
-      options find(_.isDirectory) getOrElse(root)
+      val options = Seq(file("src", "test"), file("tests"), file("src", "tests"))
+      options find(_.isDirectory) getOrElse(file("test"))
     }
     override def depends = Seq[Depend]() // no idea!
   }
@@ -140,10 +144,6 @@ object ProjectModel {
     override def hasDocs = file("target", "site", "apidocs").exists
     override def tryGenerateDocs () = Maven.buildDocs(root)
 
-    override def needsReindex (lastIndexed :Long) =
-      // TODO: should we check every subdirectory of {testS|s}ourceDir? probably...
-      super.needsReindex(lastIndexed) || (pfile.lastModified > lastIndexed)
-
     override protected val pfile = file("pom.xml")
   }
 
@@ -151,14 +151,13 @@ object ProjectModel {
     override val flavor        = "m2"
     override def isRemote      = true
     override def sourceDir     = artifact("sources")
-    override def testSourceDir = root
+    override def testSourceDir = artifact("test-sources") // no existy
 
     override def tryDownloadSource () = tryDownload("sources")
     override def hasDocs = artifact("javadoc").exists
     override def tryGenerateDocs () = tryDownload("javadoc")
 
-    override def needsReindex (lastIndexed :Long) =
-      super.needsReindex(lastIndexed) || (pfile.lastModified > lastIndexed)
+    override def needsReindex (lastIndexed :Long) = (sourceDir.lastModified > lastIndexed)
 
     private def artifact (cfier :String) =
       file(pfile.getName.replaceAll(".pom", s"-$cfier.jar"))
@@ -214,9 +213,6 @@ object ProjectModel {
     override def hasDocs = file("target", "api").exists
     override def tryGenerateDocs () = SBT.buildDocs(root)
 
-    override def needsReindex (lastIndexed :Long) =
-      super.needsReindex(lastIndexed) || (_bfile.lastModified > lastIndexed)
-
     // TODO: are there better ways to detect SBT?
     private lazy val _bfile = Seq(file("build.sbt"), file("projects", "Build.scala")) find(
       _.exists) getOrElse(file("build.sbt"))
@@ -237,8 +233,7 @@ object ProjectModel {
     override def hasDocs = artifact("docs", "javadoc").exists
     override def tryGenerateDocs () = tryDownload("docs", "javadoc")
 
-    override def needsReindex (lastIndexed :Long) =
-      super.needsReindex(lastIndexed) || (pfile.lastModified > lastIndexed)
+    override def needsReindex (lastIndexed :Long) = (sourceDir.lastModified > lastIndexed)
 
     private def artifact (dir :String, cfier :String) =
       file(dir, s"${fqId.artifactId}-${fqId.version}-$cfier.jar")
