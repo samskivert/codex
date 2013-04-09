@@ -28,5 +28,9 @@ resource = elisp/codex-mode.el
 jvmarg = -mx512M
 jvmarg = -Dappdir=%APPDIR%
 
+# We require Java 7
+java_version = 1070017
+java_location = [mac os x] /jvms/java7_macosx.jar
+
 # Main entry point
 class = codex.Codex
