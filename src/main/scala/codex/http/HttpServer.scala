@@ -40,15 +40,15 @@ class HttpServer extends Server(config.httpPort) {
     ctx.addServlet(new ServletHolder(new DocServlet), "/doc/*")
     // ctx.addServlet(new ServletHolder(new DefaultServlet), "/*")
 
-    // // if there's another Codex running, tell it to step aside
-    // try {
-    //   val rsp = Source.fromURL(getServerURL("shutdown")).getLines.mkString("\n")
-    //   if (!rsp.equals("byebye")) {
-    //     log.warning("Got weird repsonse when shutting down existing server: " + rsp)
-    //   }
-    // } catch {
-    //   case ce :java.net.ConnectException => // no other server, no problem!
-    //   case e :Exception => log.warning("Not able to shutdown local server: " + e)
-    // }
+    // if there's another Codex running, tell it to step aside
+    try {
+      val rsp = Source.fromURL(config.codexURL("shutdown")).getLines.mkString("\n")
+      if (!rsp.equals("byebye")) {
+        log.warning("Got weird repsonse when shutting down existing server: " + rsp)
+      }
+    } catch {
+      case ce :java.net.ConnectException => // no other server, no problem!
+      case e :Exception => log.warning("Not able to shutdown local server: " + e)
+    }
   }
 }
