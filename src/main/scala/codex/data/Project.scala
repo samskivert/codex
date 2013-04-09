@@ -49,13 +49,9 @@ class Project(
 
   /** Returns the time at which this project was last indexed. */
   def lastIndexed = {
-    if (_lastIndexed == 0L) {
-      val dbfile = file(_metaDir, "project.h2.db")
-      if (dbfile.exists) _lastIndexed = dbfile.lastModified
-    }
+    if (_lastIndexed == 0L) _lastIndexed = Util.fileToLong(_lastIndexedFile)
     _lastIndexed
   }
-  private var _lastIndexed = 0L
 
   /** Returns all definitions in this project's extent with the specified name.
     *
@@ -141,6 +137,7 @@ class Project(
   def reindex () = using(_session) {
     log.info(s"Rescanning $fqId...")
     _lastIndexed = System.currentTimeMillis
+    Util.longToFile(_lastIndexedFile, _lastIndexed)
 
     // clear out our existing compunit and elements tables
     dependsT deleteWhere(d => not (d.groupId === ""))
@@ -155,6 +152,8 @@ class Project(
     processSource(_model.testSourceDir, true)
     // TODO: write this to a file or something? or just use last mod time on database file?
   }
+
+  override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
 
   private[data] def delete () {
     log.info(s"Deleting project metadata: ${_metaDir}")
@@ -217,8 +216,6 @@ class Project(
     loop(loc.elemId, Nil)
   }
 
-  override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
-
   private def processSource (dir :File, isTest :Boolean) {
     if (!dir.exists && !isTest) {
       log.info(s"No source for ${fqId}. Attempting download...")
@@ -253,6 +250,10 @@ class Project(
     }
   }
 
+  // this is initialized on the first call to lastIndexed
+  private var _lastIndexed = 0L
+  private lazy val _lastIndexedFile = file(_metaDir, "indexed.stamp")
+
   private lazy val _model = ProjectModel.forProject(flavor, fqId, root)
 
   private lazy val _metaDir = {
@@ -277,7 +278,7 @@ object ProjectDB extends Schema {
   /** Tracks this project's dependencies. */
   val dependsT = table[Depend]
 
-  /** A row in the [[compunits]] table. */
+  /** A row in the [[compunitsT]] table. */
   case class CompUnit (
     /** The path to this unit (relative to project root). */
     path :String,
@@ -294,7 +295,7 @@ object ProjectDB extends Schema {
   /** Tracks this project's compilation units. */
   val compunitsT = table[CompUnit]
 
-  /** A row in the [[elements]] table. */
+  /** A row in the [[elementsT]] table. */
   case class Element (
     /** The element that owns this element, or zero if it's top-level. */
     ownerId :Int,
