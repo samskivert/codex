@@ -50,7 +50,8 @@ abstract class ProjectModel (
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */
   def needsReindex (lastIndexed :Long) =
-    haveNewerDir(lastIndexed)(sourceDir) || haveNewerDir(lastIndexed)(testSourceDir)
+    ((sourceDir.exists && haveNewerDir(lastIndexed)(sourceDir)) ||
+      (testSourceDir.exists && haveNewerDir(lastIndexed)(testSourceDir)))
 
   protected def haveNewerDir(lastIndexed :Long)(dir :File) :Boolean = {
     if (dir.lastModified > lastIndexed) true
