@@ -52,9 +52,9 @@ object DB {
     }
     // otherwise perform the applicable migration(s)
     else migs filter(fileVers < _._1) foreach { case (vers, descrip, sqls) =>
-      log.info(descrip)
+      log.info(root.getPath + ": " + descrip)
       // perform the migration
-      val stmt = Session.currentSession.connection.createStatement
+      val stmt = sess.connection.createStatement
       try sqls foreach { stmt.executeUpdate(_) }
       finally stmt.close
       // note that we're consistent with the specified version
