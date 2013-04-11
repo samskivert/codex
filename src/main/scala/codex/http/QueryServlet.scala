@@ -68,7 +68,7 @@ class QueryServlet extends AbstractServlet {
     // and deliver the results based on whether we got 0, 1, or many matches
     ls match {
       case Seq() => errNotFound(s"Found no element $defn")
-      case Seq((l, fqNm, path)) => ctx.rsp.sendRedirect(path)
+      case Seq((l, fqNm, url)) => ctx.rsp.sendRedirect(url)
       case _     => ctx.success(Templates.tmpl("docs.tmpl"),
                                 Map("name" -> defn, "matches" -> ls))
     }

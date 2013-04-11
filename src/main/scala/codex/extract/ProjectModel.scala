@@ -10,7 +10,7 @@ import java.nio.channels.Channels
 import pomutil.{POM, Dependency}
 
 import codex._
-import codex.data.{Depend, FqId}
+import codex.data.{Depend, FqId, Loc}
 
 /** Provides information about a project's organization. */
 abstract class ProjectModel (
@@ -52,6 +52,17 @@ abstract class ProjectModel (
 
   /** Attempts to download or generate the documentation for this project. */
   def tryGenerateDocs () {}
+
+  /** Returns the doc URL for `loc`. */
+  def docUrl (loc :Loc, cs :List[String]) :String = {
+    val docurl = cs flatMap(_ split("\\.")) mkString("/")
+    // TODO: figure out a less hacky way of handling Scala objects
+    val hackurl = loc.kind match {
+      case "object" => docurl + "$"
+      case _ => docurl
+    }
+    s"/doc/$flavor/$groupId/$artifactId/$version/$hackurl.html"
+  }
 
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */

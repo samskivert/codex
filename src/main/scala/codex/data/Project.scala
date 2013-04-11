@@ -95,16 +95,10 @@ class Project(
     */
   def qualify (loc :Loc) :String = comps(loc).mkString(".")
 
-  /** Returns (`loc`, `fqName`, `docPath`) for the supplied element. */
+  /** Returns (`loc`, `fqName`, `docUrl`) for the supplied element. */
   def fordoc (loc :Loc) :(Loc, String, String) = {
     val cs = comps(loc)
-    val docurl = cs flatMap(_ split("\\.")) mkString("/")
-    // TODO: figure out a less hacky way of handling Scala objects
-    val hackurl = loc.kind match {
-      case "object" => docurl + "$"
-      case _ => docurl
-    }
-    (loc, cs.mkString("."), s"/doc/$flavor/$groupId/$artifactId/$version/$hackurl.html")
+    (loc, cs.mkString("."), _model.docUrl(loc, cs))
   }
 
   /** Used by [[visit]] to visit all comp units and elements in this project. */
