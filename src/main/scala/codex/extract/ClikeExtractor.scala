@@ -13,8 +13,8 @@ import codex._
 class ClikeExtractor (lang :String) extends Extractor {
   import Clike._
 
-  override def process (visitor :Visitor, unitName :String, reader :Reader) {
-    visitor.onCompUnit(unitName)
+  override def process (visitor :Visitor, isTest :Boolean, unitName :String, reader :Reader) {
+    visitor.onCompUnit(unitName, isTest)
 
     val kinds = kindsByLang(lang)
     var prevtok :String = null

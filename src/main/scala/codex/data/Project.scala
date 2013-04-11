@@ -151,8 +151,27 @@ class Project(
       FamilyMember) foreach familyMembersT.insert
 
     // process the source in the main and test directories
-    processSource(_model.sourceDir, false)
-    processSource(_model.testSourceDir, true)
+    _model.applyToSource(Extractor.extract(new Visitor() {
+      def onCompUnit (unitPath :String, isTest :Boolean) {
+        val path = unitPath.startsWith(rootPath) match {
+          case true  => unitPath.substring(rootPath.size)
+          case false => log.warning("Visiting compunit outside of project?", "proj", fqId,
+                                    "root", rootPath, "path", unitPath) ; unitPath
+        }
+        lastUnitId = compunitsT.insert(CompUnit(path, isTest)).id
+        elemStack = Nil
+      }
+      def onEnter (name :String, kind :String, offset :Int) {
+        val ownerId = elemStack.headOption.getOrElse(0)
+        val elem = Element(ownerId, name, name.toLowerCase, kind, lastUnitId, offset)
+        elemStack = elementsT.insert(elem).id :: elemStack
+      }
+      def onExit (name :String) {
+        elemStack = elemStack.tail
+      }
+      var lastUnitId = 0
+      var elemStack = Nil :List[Int]
+    }))
     // TODO: write this to a file or something? or just use last mod time on database file?
   }
 
@@ -218,40 +237,6 @@ class Project(
       }
     }
     loop(loc.elemId, Nil)
-  }
-
-  private def processSource (dir :File, isTest :Boolean) {
-    if (!dir.exists && !isTest) {
-      log.info(s"No source for ${fqId}. Attempting download...")
-      // try downloading source (TODO: in background?)
-      _model.tryDownloadSource()
-    }
-
-    if (dir.exists) {
-      val viz = new Visitor() {
-        def onCompUnit (unitPath :String) {
-          val path = unitPath.startsWith(rootPath) match {
-            case true  => unitPath.substring(rootPath.size)
-            case false => log.warning("Visiting compunit outside of project?", "proj", fqId,
-                                      "root", rootPath, "path", unitPath) ; unitPath
-          }
-          lastUnitId = compunitsT.insert(CompUnit(path, isTest)).id
-          elemStack = Nil
-        }
-        def onEnter (name :String, kind :String, offset :Int) {
-          val ownerId = elemStack.headOption.getOrElse(0)
-          val elem = Element(ownerId, name, name.toLowerCase, kind, lastUnitId, offset)
-          elemStack = elementsT.insert(elem).id :: elemStack
-        }
-        def onExit (name :String) {
-          elemStack = elemStack.tail
-        }
-        var lastUnitId = 0
-        var elemStack = Nil :List[Int]
-      }
-      log.info(s"Extracting metadata from ${dir.getPath}...")
-      Extractor.extract(dir, viz)
-    }
   }
 
   // this is initialized on the first call to lastIndexed

@@ -8,6 +8,7 @@ import java.io.{File, FileOutputStream}
 import java.net.{HttpURLConnection, URL}
 import java.nio.channels.Channels
 import pomutil.{POM, Dependency}
+import scala.collection.mutable.{Set => MSet}
 
 import codex._
 import codex.data.{Depend, FqId, Loc}
@@ -32,8 +33,6 @@ abstract class ProjectModel (
   def groupId :String
   def artifactId :String
   def version :String
-  def sourceDir :File
-  def testSourceDir :File
 
   /** Extracts this project's transitive dependencies. */
   def depends :Seq[Depend]
@@ -44,8 +43,9 @@ abstract class ProjectModel (
     */
   def family :Seq[File] = Seq()
 
-  /** Attempts to download the source code for this project (only meaningful if [[isRemote]]). */
-  def tryDownloadSource () {}
+  /** Applies `f` to all source files in this project. The first argument indicates whether the file
+    * (second arg) is test source (true) or main source (false). */
+  def applyToSource (f :Boolean => File => Unit)
 
   /** `true` if this project appears to have documentation in the expected place. */
   def hasDocs = false
@@ -66,13 +66,14 @@ abstract class ProjectModel (
 
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */
-  def needsReindex (lastIndexed :Long) =
-    ((sourceDir.exists && haveNewerDir(lastIndexed)(sourceDir)) ||
-      (testSourceDir.exists && haveNewerDir(lastIndexed)(testSourceDir)))
+  def needsReindex (lastIndexed :Long) :Boolean
 
-  protected def haveNewerDir(lastIndexed :Long)(dir :File) :Boolean = {
-    if (dir.lastModified > lastIndexed) true
-    else dir.listFiles filter(_.isDirectory) exists(haveNewerDir(lastIndexed))
+  protected def haveNewer (lastIndexed :Long)(root :File) = {
+    def loop (dir :File) :Boolean = {
+      if (dir.lastModified > lastIndexed) true
+      else dir.listFiles exists(f => f.isDirectory && loop(f))
+    }
+    root.exists && loop(root)
   }
 
   /** Creates a file, relative to the project root, with the supplied path components. */
@@ -110,35 +111,48 @@ object ProjectModel {
     override def groupId    = "unknown"
     override def artifactId = root.getName
     override def version    = "unknown"
+    override def depends    = Seq[Depend]() // no idea!
 
-    override def sourceDir = {
-      val options = Seq(file("src", "main"))
-      options find(_.isDirectory) getOrElse(file("src"))
+    override def applyToSource (f :Boolean => File => Unit) {
+      srcDir foreach applyAll(f(false))
+      testSrcDir foreach applyAll(f(true))
     }
-    override def testSourceDir = {
-      val options = Seq(file("src", "test"), file("tests"), file("src", "tests"))
-      options find(_.isDirectory) getOrElse(file("test"))
-    }
-    override def depends = Seq[Depend]() // no idea!
+
+    override def needsReindex (lastIndexed :Long) =
+      ((srcDir map(haveNewer(lastIndexed)) getOrElse false) ||
+       (testSrcDir map(haveNewer(lastIndexed)) getOrElse false))
+
+    protected def srcDir = firstDir(file("src", "main"), file("src"))
+    protected def testSrcDir = firstDir(file("src", "test"), file("test"),
+                                        file("src", "tests"), file("tests"))
   }
 
-  abstract class POMProjectModel (root :File) extends ProjectModel(root) {
+  abstract class POMProjectModel (root :File, val pfile :File) extends ProjectModel(root) {
     override def isValid    = pfile.exists
     override def name       = _pom.name getOrElse root.getName
     override def groupId    = _pom.groupId
     override def artifactId = _pom.artifactId
     override def version    = _pom.version
 
+    override def depends = _pom.transitiveDepends(true) map { d =>
+      Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test")
+    }
+
+    protected lazy val _pom = POM.fromFile(pfile).get
+  }
+
+  class MavenProjectModel (root :File) extends POMProjectModel(root, file(root, "pom.xml")) {
+    override val flavor   = "maven"
+    override def isRemote = false
+
     override def depends = {
-      val realdeps = _pom.transitiveDepends(true) map { d =>
-        Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test")
-      }
+      val realdeps = super.depends
       // TEMP hack: add scala and java depends as appropriate
       val haveRealJava = realdeps.exists(d => d.groupId == "java" && d.artifactId == "jdk")
       val haveRealScala = realdeps.exists(d => d.groupId == "org.scala-lang" &&
         d.artifactId == "scala-library")
-      val haveScalaSource = codex.file(sourceDir, "scala").exists
-      val haveJavaSource = codex.file(sourceDir, "java").exists
+      val haveScalaSource = codex.file(_srcDir, "scala").exists
+      val haveJavaSource = codex.file(_srcDir, "java").exists
       // TODO: get versions from POM
       val fakeScalaDep = if (haveScalaSource && !haveRealScala)
         Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "m2", false)) else Seq()
@@ -146,18 +160,6 @@ object ProjectModel {
         Seq(Depend("java", "jdk", "1.6", "m2", false)) else Seq()
       realdeps ++ fakeScalaDep ++ fakeJavaDep
     }
-
-    protected val pfile :File
-    protected lazy val _pom = POM.fromFile(pfile).get
-  }
-
-  class MavenProjectModel (root :File) extends POMProjectModel(root) {
-    override val flavor        = "maven"
-    override def isRemote      = false
-    override def sourceDir     = _pom.buildProps.get("sourceDirectory") map(file(_)) getOrElse(
-      file("src", "main"))
-    override def testSourceDir = _pom.buildProps.get("testSourceDirectory") map(file(_)) getOrElse(
-      file("src", "test"))
 
     override def family = {
       // finds our the parent-most parent that did not come from m2repo
@@ -174,23 +176,38 @@ object ProjectModel {
       allmods(eldestLocalParent(_pom))
     }
 
+    override def applyToSource (f :Boolean => File => Unit) {
+      applyAll(f(false))(_srcDir)
+      applyAll(f(true))(_testSrcDir)
+    }
+
+    override def needsReindex (lastIndexed :Long) =
+      haveNewer(lastIndexed)(_srcDir) || haveNewer(lastIndexed)(_testSrcDir)
+
     override def hasDocs = file("target", "site", "apidocs").exists
     override def tryGenerateDocs () = Maven.buildDocs(root)
 
-    override protected val pfile = file("pom.xml")
+    private def srcDir (name :String, defdir :String) =
+      _pom.buildProps.get(name) map(file(_)) getOrElse(file("src", defdir))
+    private lazy val _srcDir = srcDir("sourceDirectory", "main")
+    private lazy val _testSrcDir = srcDir("testSourceDirectory", "test")
   }
 
-  class M2ProjectModel (root :File, fqId :FqId) extends POMProjectModel(root) {
+  class M2ProjectModel (root :File, fqId :FqId) extends POMProjectModel(
+    root, file(root, s"${fqId.artifactId}-${fqId.version}.pom")) {
     override val flavor        = "m2"
     override def isRemote      = true
-    override def sourceDir     = artifact("sources")
-    override def testSourceDir = artifact("test-sources") // no existy
 
-    override def tryDownloadSource () = tryDownload("sources")
+    override def applyToSource (f :Boolean => File => Unit) {
+      val src = artifact("sources")
+      if (!src.exists) tryDownload("sources")
+      if (src.exists) f(false)(src)
+    }
+
     override def hasDocs = artifact("javadoc").exists
     override def tryGenerateDocs () = tryDownload("javadoc")
 
-    override def needsReindex (lastIndexed :Long) = (sourceDir.lastModified > lastIndexed)
+    override def needsReindex (lastIndexed :Long) = artifact("sources").lastModified > lastIndexed
 
     private def artifact (cfier :String) =
       file(pfile.getName.replaceAll(".pom", s"-$cfier.jar"))
@@ -213,8 +230,6 @@ object ProjectModel {
         case code => log.info(s"Download failed: $code")
       }
     }
-
-    override protected val pfile = file(s"${fqId.artifactId}-${fqId.version}.pom")
   }
 
   class SBTProjectModel (root :File) extends DefaultProjectModel(root) {
@@ -226,10 +241,6 @@ object ProjectModel {
     override def artifactId = _extracted.getOrElse("name", super.artifactId)
     override def version    = _extracted.getOrElse("version", super.version)
 
-    override def sourceDir = _extracted.get("compile:source-directory") map(
-      new File(_)) getOrElse(super.sourceDir)
-    override def testSourceDir = _extracted.get("test:source-directory") map(
-      new File(_)) getOrElse(super.sourceDir)
     override def depends = {
       val realdeps = _extracted.get("library-dependencies") map(SBT.parseDeps) getOrElse(Seq())
       // TEMP hack: add scala and java depends as appropriate
@@ -246,6 +257,11 @@ object ProjectModel {
     override def hasDocs = file("target", "api").exists
     override def tryGenerateDocs () = SBT.buildDocs(root)
 
+    override protected def srcDir =
+      (_extracted.get("compile:source-directory") map(new File(_))) orElse super.srcDir
+    override protected def testSrcDir =
+      (_extracted.get("test:source-directory") map(new File(_))) orElse super.testSrcDir
+
     // TODO: are there better ways to detect SBT?
     private lazy val _bfile = Seq(file("build.sbt"), file("projects", "Build.scala")) find(
       _.exists) getOrElse(file("build.sbt"))
@@ -256,17 +272,22 @@ object ProjectModel {
   }
 
   // TODO: revamp to read data from IVY file, not fake POM file
-  class IvyProjectModel (root :File, fqId :FqId) extends POMProjectModel(root) {
+  class IvyProjectModel (root :File, fqId :FqId) extends POMProjectModel(
+    root, file(root, "poms", s"${fqId.artifactId}-${fqId.version}.pom")) {
     override val flavor        = "ivy"
     override def isRemote      = true
-    override def sourceDir     = artifact("srcs", "sources")
-    override def testSourceDir = artifact("srcs", "test-sources") // no existy!
 
-    override def tryDownloadSource () = tryDownload("srcs", "sources")
+    override def applyToSource (f :Boolean => File => Unit) {
+      val src = artifact("srcs", "sources")
+      if (!src.exists) tryDownload("srcs", "sources")
+      if (src.exists) f(false)(src)
+    }
+
     override def hasDocs = artifact("docs", "javadoc").exists
     override def tryGenerateDocs () = tryDownload("docs", "javadoc")
 
-    override def needsReindex (lastIndexed :Long) = (sourceDir.lastModified > lastIndexed)
+    override def needsReindex (lastIndexed :Long) =
+      artifact("srcs", "sources").lastModified > lastIndexed
 
     private def artifact (dir :String, cfier :String) =
       file(dir, s"${fqId.artifactId}-${fqId.version}-$cfier.jar")
@@ -285,9 +306,25 @@ object ProjectModel {
       //   case code => log.info(s"Download failed: $code")
       // }
     }
-
-    override protected val pfile = file("poms", s"${fqId.artifactId}-${fqId.version}.pom")
   }
+
+  private def firstDir (dirs :File*) = dirs find(_.isDirectory)
+
+  private def applyAll (f :File => Unit)(root :File) {
+    val seen = MSet[File]()
+    def loop (dir :File) {
+      dir.listFiles map(_.getCanonicalFile) filterNot(seen) foreach { file =>
+        seen += file
+        if (file.isFile) f(file)
+        else if (file.isDirectory && !isSkipDir(file)) loop(file)
+      }
+    }
+    if (root.isDirectory) loop(root)
+  }
+
+  // TODO: allow further customization
+  private def isSkipDir (dir :File) = SkipDirNames(dir.getName)
+  private val SkipDirNames = Set(".", "..", "CVS", ".svn", ".git", ".hg")
 
   private def isM2 (file :File) = file.getPath startsWith m2repo.getPath
   private def m2root (d :Depend) = file(
