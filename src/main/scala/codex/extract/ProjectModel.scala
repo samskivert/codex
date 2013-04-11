@@ -66,15 +66,10 @@ abstract class ProjectModel (
 
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */
-  def needsReindex (lastIndexed :Long) :Boolean
+  def needsReindex (lastIndexed :Long) = sourceExists(_.lastModified > lastIndexed)
 
-  protected def haveNewer (lastIndexed :Long)(root :File) = {
-    def loop (dir :File) :Boolean = {
-      if (dir.lastModified > lastIndexed) true
-      else dir.listFiles exists(f => f.isDirectory && loop(f))
-    }
-    root.exists && loop(root)
-  }
+  /** Returns true if a source file exists that satisfies `p`. */
+  protected def sourceExists (p :File => Boolean) :Boolean
 
   /** Creates a file, relative to the project root, with the supplied path components. */
   protected def file (comps :String*) = codex.file(root, comps :_*)
@@ -118,9 +113,8 @@ object ProjectModel {
       testSrcDir foreach applyAll(f(true))
     }
 
-    override def needsReindex (lastIndexed :Long) =
-      ((srcDir map(haveNewer(lastIndexed)) getOrElse false) ||
-       (testSrcDir map(haveNewer(lastIndexed)) getOrElse false))
+    protected def sourceExists (p :File => Boolean) =
+      (srcDir map(exists(p)) getOrElse false) || (testSrcDir map(exists(p)) getOrElse false)
 
     protected def srcDir = firstDir(file("src", "main"), file("src"))
     protected def testSrcDir = firstDir(file("src", "test"), file("test"),
@@ -181,11 +175,11 @@ object ProjectModel {
       applyAll(f(true))(_testSrcDir)
     }
 
-    override def needsReindex (lastIndexed :Long) =
-      haveNewer(lastIndexed)(_srcDir) || haveNewer(lastIndexed)(_testSrcDir)
-
     override def hasDocs = file("target", "site", "apidocs").exists
     override def tryGenerateDocs () = Maven.buildDocs(root)
+
+    override protected def sourceExists (p :File => Boolean) =
+      exists(p)(_srcDir) || exists(p)(_testSrcDir)
 
     private def srcDir (name :String, defdir :String) =
       _pom.buildProps.get(name) map(file(_)) getOrElse(file("src", defdir))
@@ -207,7 +201,7 @@ object ProjectModel {
     override def hasDocs = artifact("javadoc").exists
     override def tryGenerateDocs () = tryDownload("javadoc")
 
-    override def needsReindex (lastIndexed :Long) = artifact("sources").lastModified > lastIndexed
+    override protected def sourceExists (p :File => Boolean) = p(artifact("sources"))
 
     private def artifact (cfier :String) =
       file(pfile.getName.replaceAll(".pom", s"-$cfier.jar"))
@@ -286,8 +280,7 @@ object ProjectModel {
     override def hasDocs = artifact("docs", "javadoc").exists
     override def tryGenerateDocs () = tryDownload("docs", "javadoc")
 
-    override def needsReindex (lastIndexed :Long) =
-      artifact("srcs", "sources").lastModified > lastIndexed
+    override protected def sourceExists (p :File => Boolean) = p(artifact("srcs", "sources"))
 
     private def artifact (dir :String, cfier :String) =
       file(dir, s"${fqId.artifactId}-${fqId.version}-$cfier.jar")
@@ -320,6 +313,17 @@ object ProjectModel {
       }
     }
     if (root.isDirectory) loop(root)
+  }
+
+  private def exists (p :File => Boolean)(root :File) = {
+    val seen = MSet[File]()
+    def loop (dir :File) :Boolean = {
+      dir.listFiles filterNot(seen) exists { file =>
+        seen += file
+        (file.isFile && p(file)) || (file.isDirectory && !isSkipDir(file) && loop(file))
+      }
+    }
+    root.isDirectory && loop(root)
   }
 
   // TODO: allow further customization
