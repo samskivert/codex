@@ -47,6 +47,9 @@ class Project(
   /** Returns this project's complete transitive dependency set. */
   def depends :Seq[Depend] = using(_session) { dependsT.toList }
 
+  /** Returns this project's family members. */
+  def family :Seq[File] = using(_session) { familyMembersT.toList.map(_.toFile) }
+
   /** Returns the time at which this project was last indexed. */
   def lastIndexed = {
     if (_lastIndexed == 0L) _lastIndexed = Util.fileToLong(_lastIndexedFile)
@@ -71,15 +74,18 @@ class Project(
 
     // TODO: handle forTest
     val deps = depends filterNot(_.forTest)
-    log.info(s"${this.name} (and ${deps.size} depends) findDefn: $name")
+    val rels = family
+    log.info(s"${this.name} (${deps.size} depends, ${rels.size} relations) findDefn: $name")
 
     // TODO: return results incrementally?
 
-    // search this project and its transitive depends (this will auto-create projects for our
-    // transitive dependencies if they don't already exist)
+    // search this project, its transitive depends and relations (this will auto-create projects
+    // for our transitive dependencies and relations if they don't already exist)
     findDefnLocal(name, kinds, map, true) ++ projects.request { ps =>
-      for { dh  <- deps flatMap ps.forDep
-            loc <- dh request(_ findDefnLocal(name, kinds, map, false)) } yield loc
+      (for { dh  <- deps flatMap ps.forDep
+             loc <- dh request(_ findDefnLocal(name, kinds, map, false)) } yield loc) ++
+      (for { rh  <- rels flatMap ps.forRoot
+             loc <- rh request(_ findDefnLocal(name, kinds, map, false)) } yield loc)
     }
     // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
@@ -139,13 +145,16 @@ class Project(
     _lastIndexed = System.currentTimeMillis
     Util.longToFile(_lastIndexedFile, _lastIndexed)
 
-    // clear out our existing compunit and elements tables
+    // clear out our existing tables
     dependsT deleteWhere(d => not (d.groupId === ""))
+    familyMembersT deleteWhere(fm => not (fm.path === ""))
     compunitsT deleteWhere(_.id gt 0)
     elementsT deleteWhere(_.id gt 0)
 
-    // depends are easy, jam 'em in!
+    // depends and family members are easy, jam 'em in!
     _model.depends foreach dependsT.insert
+    _model.family map(_.getPath) filterNot(_ == rootPath) map(
+      FamilyMember) foreach familyMembersT.insert
 
     // process the source in the main and test directories
     processSource(_model.sourceDir, false)
@@ -266,7 +275,11 @@ class Project(
   // defer opening of our database until we need it; thousands of project objects may be created at
   // app startup time, but not that many of them will actually get queried
   private lazy val _session = {
-    val sess = DB.session(_metaDir, "project", ProjectDB, 1)
+    val sess = DB.session(
+      _metaDir, "project", ProjectDB, 2,
+      (2, "Adding FamilyMember table",
+       Seq("create table FamilyMember (path varchar(512) not null)"))
+    )
     shutdownSig onEmit { sess.close }
     sess
   }
@@ -278,6 +291,14 @@ object ProjectDB extends Schema {
 
   /** Tracks this project's dependencies. */
   val dependsT = table[Depend]
+
+  /** A row in the [[familyMembersT]] table. */
+  case class FamilyMember (path :String) {
+    def toFile = file(path)
+  }
+
+  /** Tracks this project's family members. */
+  val familyMembersT = table[FamilyMember]
 
   /** A row in the [[compunitsT]] table. */
   case class CompUnit (

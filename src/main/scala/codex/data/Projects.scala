@@ -23,6 +23,10 @@ class Projects extends Entity {
     case (root, p) if (path startsWith(root + File.separator)) => p
   } orElse (findRoot(new File(path)) flatMap ProjectModel.forRoot map createProject)
 
+  /** Returns (creating if necessary) the project at the specified root. */
+  def forRoot (root :File) :Option[Handle[Project]] =
+    (_byPath get root.getPath) orElse (ProjectModel.forRoot(root) map createProject)
+
   /** Returns (creating if necessary) the project for the specified dependency. */
   def forDep (depend :Depend) :Option[Handle[Project]] =
     (_byFqId get depend.toFqId) orElse (ProjectModel.forDepend(depend) map createProject)

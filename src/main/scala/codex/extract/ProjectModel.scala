@@ -38,6 +38,12 @@ abstract class ProjectModel (
   /** Extracts this project's transitive dependencies. */
   def depends :Seq[Depend]
 
+  /** Extracts the paths to all projects in this project's "family". This enumerates all the modules
+    * in a multi-module project by traversing up to the multimodule parent and then finding all of
+    * its children, grandchildren, etc. This is only desired/implemented for local projects.
+    */
+  def family :Seq[File] = Seq()
+
   /** Attempts to download the source code for this project (only meaningful if [[isRemote]]). */
   def tryDownloadSource () {}
 
@@ -141,6 +147,21 @@ object ProjectModel {
       file("src", "main"))
     override def testSourceDir = _pom.buildProps.get("testSourceDirectory") map(file(_)) getOrElse(
       file("src", "test"))
+
+    override def family = {
+      // finds our the parent-most parent that did not come from m2repo
+      def eldestLocalParent (pom :POM) :POM = pom.parent match {
+        case Some(parent) if (!isM2(parent.file.get)) => eldestLocalParent(parent)
+        case _ => pom
+      }
+      // enumerates all children and grandchildren of a pom
+      def allmods (pom :POM) :Seq[File] = {
+        val pdir = pom.file.get.getParentFile
+        def toPom (m :String) = POM.fromFile(codex.file(pdir, m, "pom.xml"))
+        pdir +: (pom.allModules.distinct flatMap toPom flatMap allmods)
+      }
+      allmods(eldestLocalParent(_pom))
+    }
 
     override def hasDocs = file("target", "site", "apidocs").exists
     override def tryGenerateDocs () = Maven.buildDocs(root)
@@ -257,6 +278,7 @@ object ProjectModel {
     override protected val pfile = file("poms", s"${fqId.artifactId}-${fqId.version}.pom")
   }
 
+  private def isM2 (file :File) = file.getPath startsWith m2repo.getPath
   private def m2root (d :Depend) = file(
     m2repo, Dependency(d.groupId, d.artifactId, d.version).repositoryPath :_*)
   private val m2repo = file(home, ".m2", "repository")
