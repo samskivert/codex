@@ -28,17 +28,19 @@ class ProjectServlet extends AbstractServlet {
           if (rest contains "reindex") p.reindex()
 
           val unitBuf = ListBuffer[Map[String,AnyRef]]()
+          val elems = ListBuffer[String]()
+          var curPath = ""
+          def flush () = if (!elems.isEmpty) {
+            unitBuf += Map("path" -> curPath, "elems" -> elems.toSeq)
+            elems.clear()
+          }
           p.visit(new p.Viz {
-            def onCompUnit (id :Int, path :String) {
-              if (!_elems.isEmpty) unitBuf += Map("path" -> _curPath, "elems" -> _elems.toSeq)
-              _elems.clear()
-              _curPath = path
-            }
+            def onCompUnit (id :Int, path :String) { flush(); curPath = path }
             def onElement (id :Int, ownerId :Int, name :String, kind :String,
-                           unitId :Int, offset :Int) { _elems += name }
-            private var _curPath = ""
-            private val _elems = ListBuffer[String]()
+                           unitId :Int, offset :Int) { elems += name }
           })
+          flush()
+
           Map("title"   -> s"$gid - $aid - $vers",
               "proj" -> p.fqId,
               "flavor"  -> p.flavor,
