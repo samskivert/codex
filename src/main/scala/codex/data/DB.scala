@@ -46,7 +46,7 @@ object DB {
 
     // if we have no version string, we need to initialize the database
     if (fileVers < 1) {
-      log.info("Initializing schema.", "name", name, "vers", codeVers)
+      log.info("Initializing schema", "root", root, "name", name, "vers", codeVers)
       using(sess) { schema.create }
       writeVersion(codeVers)
     }
