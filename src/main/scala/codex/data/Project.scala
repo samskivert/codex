@@ -246,7 +246,7 @@ class Project(
   private lazy val _model = ProjectModel.forProject(this)
 
   private lazy val _metaDir = {
-    val dir = file(root, ".codex")
+    val dir = file(metaDir, "byid", id.toString)
     if (!dir.exists) dir.mkdir()
     dir
   }
