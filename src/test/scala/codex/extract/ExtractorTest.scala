@@ -18,7 +18,7 @@ class ExtractorTest {
     val path = ".m2/repository/javax/servlet/servlet-api/2.5/servlet-api-2.5-sources.jar"
     val jar = file(home, path)
     if (jar.exists) {
-      Extractor.extract(jar, dumper(buf))
+      Extractor.extract(dumper(buf))(false)(jar)
       assertTrue(buf.length > 0) // TODO: test something?
     }
   }
@@ -27,7 +27,7 @@ class ExtractorTest {
 object ExtractorTest {
 
   def dumper (buf :StringBuilder) = new Visitor {
-    def onCompUnit (path :String) = {
+    def onCompUnit (path :String, isTest :Boolean) = {
       indent = 0
       dump(s"CU $path")
     }
@@ -45,7 +45,7 @@ object ExtractorTest {
 
   def test (ex :Extractor, code :String) = {
     val buf = new StringBuilder
-    ex.process(dumper(buf), "test", new StringReader(code))
+    ex.process(dumper(buf), false, "test", new StringReader(code))
     buf.toString
   }
 }

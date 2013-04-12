@@ -126,11 +126,12 @@ object ProjectsUtil {
 
   def findRoot (curDir :File) :Option[File] =
     if (curDir == null) None
-    else if (isProjectRoot(curDir)) Some(curDir)
-    else findRoot(curDir.getParentFile)
-
-  def isProjectRoot (dir :File) = RootFiles exists (file(dir, _).exists)
+    else if (!curDir.isDirectory) findRoot(curDir.getParentFile)
+    else curDir.listFiles collectFirst {
+      case f if (RootFiles(f.getName)) => curDir
+      case f if (f.getName.endsWith(".csproj")) => f
+    } orElse findRoot(curDir.getParentFile)
 
   // TODO: expand this and/or specialize it based on the suffix of the candidate file
-  private val RootFiles = List(".git", ".hg", "build.xml", "pom.xml", "build.sbt", "Makefile")
+  private val RootFiles = Set(".git", ".hg", "build.xml", "pom.xml", "build.sbt", "Makefile")
 }

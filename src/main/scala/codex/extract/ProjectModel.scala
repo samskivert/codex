@@ -79,7 +79,10 @@ object ProjectModel {
 
   /** Returns `Some(model)` for the project at `root` or `None` if we can't grok root. */
   def forRoot (root :File) :Option[ProjectModel] = Seq(
-    new MavenProjectModel(root), new SBTProjectModel(root), new DefaultProjectModel(root)
+    new MavenProjectModel(root),
+    new SBTProjectModel(root),
+    new CSProjectModel(root),
+    new DefaultProjectModel(root)
   ) find(_.isValid)
 
   /** Returns the appropriate project model for a project (which has known metadata). */
@@ -93,8 +96,9 @@ object ProjectModel {
 
   /** Returns `Some(model)` for a dependency, or `None` if unresolvable. */
   def forDepend (depend :Depend) = (depend.flavor match {
-    case "m2"  => Some(new M2ProjectModel(m2root(depend), depend.toFqId))
-    case "ivy" => Some(new IvyProjectModel(ivy2root(depend), depend.toFqId))
+    case "m2"     => Some(new M2ProjectModel(m2root(depend), depend.toFqId))
+    case "ivy"    => Some(new IvyProjectModel(ivy2root(depend), depend.toFqId))
+    case "mtcore" => Some(new MTCoreProjectModel)
     case _     => None
   }) flatMap(m => if (!m.isValid) None else Some(m))
 
@@ -299,6 +303,53 @@ object ProjectModel {
       //   case code => log.info(s"Download failed: $code")
       // }
     }
+  }
+
+  class MTCoreProjectModel extends ProjectModel(file("/Developer/MonoTouch/Source")) {
+    override val flavor     = "mtcore"
+    override def isValid    = root.isDirectory
+    override def isRemote   = false
+    override def name       = "MonoTouch Core"
+    override def groupId    = "com.xamarin"
+    override def artifactId = "monotouch-core"
+    override def version    = "n/a"
+    override def depends    = Seq[Depend]() // none
+
+    override def applyToSource (f :Boolean => File => Unit) {
+      applyAll(f(false))(_srcDir)
+    }
+
+    override def needsReindex (lastIndexed :Long) = _srcDir.lastModified > lastIndexed
+    override protected def sourceExists (p :File => Boolean) = error("not used")
+
+    // TODO: special doc URL
+
+    lazy val _srcDir = file("mono", "mcs", "class")
+  }
+
+  // our root is the .csproj file rather than its containing directory
+  class CSProjectModel (csproj :File) extends DefaultProjectModel(csproj.getParentFile) {
+    override val flavor     = "cs"
+    override def isValid    = csproj.exists
+    override def isRemote   = false
+    override def name       = csproj.getName dropRight ".csproj".length
+    override def groupId    = _info.rootNamespace
+    override def artifactId = _info.assemblyName
+    override def version    = _info.version
+
+    override def depends = Seq[Depend]() // TODO
+    // TODO: add fake mtcore depend, fake monotouch depend, if needed?
+
+    override def applyToSource (f :Boolean => File => Unit) {
+      _info.sources foreach f(false) // TODO: how to differentiate test sources?
+    }
+
+    override protected def sourceExists (p :File => Boolean) = _info.sources exists p
+
+    // override def hasDocs = file("target", "api").exists
+    // override def tryGenerateDocs () = SBT.buildDocs(root)
+
+    private lazy val _info = CSProj.parse(csproj)
   }
 
   private def firstDir (dirs :File*) = dirs find(_.isDirectory)
