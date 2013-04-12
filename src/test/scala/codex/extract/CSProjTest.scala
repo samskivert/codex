@@ -18,7 +18,7 @@ class CSProjTest {
       assertEquals("macdoc", info.rootNamespace)
       assertEquals("macdoc", info.assemblyName)
       assertTrue(info.refs.contains(CSProj.Reference("System", None)))
-      // println(info)
+      // info.refs foreach println
     }
   }
 }

@@ -117,9 +117,9 @@ class Project(
 
     units.sortBy(_.path) foreach { u =>
       viz.onCompUnit(u.id, u.path)
-      elems(u.id) foreach { e =>
+      elems.get(u.id) foreach (_ foreach { e =>
         viz.onElement(e.id, e.ownerId, e.name, e.kind, e.unitId, e.offset)
-      }
+      })
     }
   }
 
@@ -243,7 +243,7 @@ class Project(
   private var _lastIndexed = 0L
   private lazy val _lastIndexedFile = file(_metaDir, "indexed.stamp")
 
-  private lazy val _model = ProjectModel.forProject(flavor, fqId, root)
+  private lazy val _model = ProjectModel.forProject(this)
 
   private lazy val _metaDir = {
     val dir = file(root, ".codex")

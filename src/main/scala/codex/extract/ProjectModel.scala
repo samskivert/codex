@@ -11,7 +11,7 @@ import pomutil.{POM, Dependency}
 import scala.collection.mutable.{Set => MSet}
 
 import codex._
-import codex.data.{Depend, FqId, Loc}
+import codex.data.{Depend, FqId, Loc, Project}
 
 /** Provides information about a project's organization. */
 abstract class ProjectModel (
@@ -86,12 +86,14 @@ object ProjectModel {
   ) find(_.isValid)
 
   /** Returns the appropriate project model for a project (which has known metadata). */
-  def forProject (flavor :String, fqId :FqId, root :File) = flavor match {
-    case "maven" => new MavenProjectModel(root)
-    case "sbt"   => new SBTProjectModel(root)
-    case "m2"    => new M2ProjectModel(root, fqId)
-    case "ivy"   => new IvyProjectModel(root, fqId)
-    case _       => new DefaultProjectModel(root)
+  def forProject (proj :Project) = proj.flavor match {
+    case "maven"  => new MavenProjectModel(proj.root)
+    case "sbt"    => new SBTProjectModel(proj.root)
+    case "m2"     => new M2ProjectModel(proj.root, proj.fqId)
+    case "ivy"    => new IvyProjectModel(proj.root, proj.fqId)
+    case "cs"     => new CSProjectModel(file(proj.root, proj.name + ".csproj")) // meh, hack
+    case "mtcore" => new MTCoreProjectModel
+    case _        => new DefaultProjectModel(proj.root)
   }
 
   /** Returns `Some(model)` for a dependency, or `None` if unresolvable. */
@@ -306,13 +308,13 @@ object ProjectModel {
   }
 
   class MTCoreProjectModel extends ProjectModel(file("/Developer/MonoTouch/Source")) {
-    override val flavor     = "mtcore"
+    override val flavor     = mtCoreDep.flavor
     override def isValid    = root.isDirectory
     override def isRemote   = false
     override def name       = "MonoTouch Core"
-    override def groupId    = "com.xamarin"
-    override def artifactId = "monotouch-core"
-    override def version    = "n/a"
+    override def groupId    = mtCoreDep.groupId
+    override def artifactId = mtCoreDep.artifactId
+    override def version    = mtCoreDep.version
     override def depends    = Seq[Depend]() // none
 
     override def applyToSource (f :Boolean => File => Unit) {
@@ -337,8 +339,13 @@ object ProjectModel {
     override def artifactId = _info.assemblyName
     override def version    = _info.version
 
-    override def depends = Seq[Depend]() // TODO
-    // TODO: add fake mtcore depend, fake monotouch depend, if needed?
+    override def depends = {
+      val sysdeps = if (_info.refs.exists(_.name == "monotouch"))
+        Seq(mtCoreDep) // TODO: also monotouch
+      else if (_info.refs.exists(_.name == "MonoMac")) Seq() // TODO: monomac deps?
+      else Seq() // TODO: mscorelib deps
+      sysdeps // TODO: actual project deps?
+    }
 
     override def applyToSource (f :Boolean => File => Unit) {
       _info.sources foreach f(false) // TODO: how to differentiate test sources?
@@ -376,6 +383,8 @@ object ProjectModel {
     }
     root.isDirectory && loop(root)
   }
+
+  private[extract] val mtCoreDep = Depend("com.xamarin", "monotouch-core", "0", "mtcore", false)
 
   // TODO: allow further customization
   private def isSkipDir (dir :File) = SkipDirNames(dir.getName)
