@@ -14,5 +14,5 @@ object Kinds {
   val types = Set("interface", "@interface", "trait", "class", "enum", "object", "struct")
 
   /** "Module" elements: package, object, etc. */
-  val modules = Set("packge", "object")
+  val modules = Set("packge", "object", "namespace")
 }

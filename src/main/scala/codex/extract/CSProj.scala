@@ -8,12 +8,21 @@ import java.io.File
 import scala.xml.{Node, NodeSeq, XML}
 
 import codex._
+import codex.data.Depend
 
 /** Utilities for interacting with Visual Studio/MonoDevelop .csproj files. */
 object CSProj {
 
   /** Models a reference to a DLL. */
-  case class Reference (name :String, file :Option[File])
+  case class Reference (name :String, file :Option[File]) {
+    /** Converts this reference to a Codex dependency. */
+    def toDepend (forTest :Boolean) = {
+      // TODO: have the project give us hints as to where to look for system DLLs?
+      val dll = (file orElse Dll.find(name))
+      val version = dll map(Monodis.assemblyInfo) map(_.version) getOrElse("0.0.0.0")
+      Depend(name, name, version, "dll", forTest, dll map(_.getAbsolutePath))
+    }
+  }
 
   /** Contains info extracted from a .csproj file. */
   case class Info (rootNamespace :String, assemblyName :String, version :String,

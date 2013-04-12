@@ -38,9 +38,9 @@ object SBT {
 
   private def toDep (ivyDep :String) = ivyDep.split(":") match {
     case Array(org, art, vers) =>
-      Some(Depend(org, art, vers, "ivy", false))
+      Some(Depend(org, art, vers, "ivy", false, None))
     case Array(org, art, vers, config) =>
-      Some(Depend(org, art, vers, "ivy", config contains "test"))
+      Some(Depend(org, art, vers, "ivy", config contains "test", None))
     case _ =>
       log.warning(s"Can't parse depend: $ivyDep") ; None
   }

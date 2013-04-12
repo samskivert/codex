@@ -99,7 +99,7 @@ class Projects extends Entity {
 
   private def map (p :Project) = {
     val pe = entity(p)
-    _byPath += (p.rootPath -> pe)
+    if (!p.isRemote) _byPath += (p.rootPath -> pe)
     _byFqId += (p.fqId -> pe)
     pe
   }

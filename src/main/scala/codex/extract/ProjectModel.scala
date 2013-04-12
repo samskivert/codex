@@ -15,7 +15,7 @@ import codex.data.{Depend, FqId, Loc, Project}
 
 /** Provides information about a project's organization. */
 abstract class ProjectModel (
-  /** The directory at which this project is rooted. */
+  /** The root for this project. Usually a directory, but not always. */
   val root :File) {
 
   /** The flavor identifier for this project model. */
@@ -87,20 +87,25 @@ object ProjectModel {
 
   /** Returns the appropriate project model for a project (which has known metadata). */
   def forProject (proj :Project) = proj.flavor match {
+    // local flavors
     case "maven"  => new MavenProjectModel(proj.root)
     case "sbt"    => new SBTProjectModel(proj.root)
+    case "cs"     => new CSProjectModel(file(proj.root, proj.name + ".csproj")) // meh, hack
+    // remote flavors
     case "m2"     => new M2ProjectModel(proj.root, proj.fqId)
     case "ivy"    => new IvyProjectModel(proj.root, proj.fqId)
-    case "cs"     => new CSProjectModel(file(proj.root, proj.name + ".csproj")) // meh, hack
+    case "dll"    => new DllProjectModel(proj.root)
+    // "special" flavors
     case "mtcore" => new MTCoreProjectModel
     case _        => new DefaultProjectModel(proj.root)
   }
 
   /** Returns `Some(model)` for a dependency, or `None` if unresolvable. */
-  def forDepend (depend :Depend) = (depend.flavor match {
-    case "m2"     => Some(new M2ProjectModel(m2root(depend), depend.toFqId))
-    case "ivy"    => Some(new IvyProjectModel(ivy2root(depend), depend.toFqId))
+  def forDepend (dep :Depend) = (dep.flavor match {
+    case "m2"     => Some(new M2ProjectModel(m2root(dep), dep.toFqId))
+    case "ivy"    => Some(new IvyProjectModel(ivy2root(dep), dep.toFqId))
     case "mtcore" => Some(new MTCoreProjectModel)
+    case "dll"    => Dll.find(dep) map(new DllProjectModel(_))
     case _     => None
   }) flatMap(m => if (!m.isValid) None else Some(m))
 
@@ -135,7 +140,7 @@ object ProjectModel {
     override def version    = _pom.version
 
     override def depends = _pom.transitiveDepends(true) map { d =>
-      Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test")
+      Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test", None)
     }
 
     protected lazy val _pom = POM.fromFile(pfile).get
@@ -155,9 +160,9 @@ object ProjectModel {
       val haveJavaSource = codex.file(_srcDir, "java").exists
       // TODO: get versions from POM
       val fakeScalaDep = if (haveScalaSource && !haveRealScala)
-        Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "m2", false)) else Seq()
+        Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "m2", false, None)) else Seq()
       val fakeJavaDep = if ((haveScalaSource || haveJavaSource) && !haveRealJava)
-        Seq(Depend("java", "jdk", "1.6", "m2", false)) else Seq()
+        Seq(Depend("java", "jdk", "1.6", "m2", false, None)) else Seq()
       realdeps ++ fakeScalaDep ++ fakeJavaDep
     }
 
@@ -248,9 +253,10 @@ object ProjectModel {
       val haveRealScala = realdeps.exists(d => d.groupId == "org.scala-lang" &&
         d.artifactId == "scala-library")
       // TODO: get versions from SBT
-      val fakeScalaDep = if (!haveRealScala)
-        Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "ivy", false)) else Seq()
-      val fakeJavaDep = if (!haveRealJava) Seq(Depend("java", "jdk", "1.6", "m2", false)) else Seq()
+      val fakeScalaDep = if (haveRealScala) Seq() else
+        Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "ivy", false, None))
+      val fakeJavaDep = if (haveRealJava) Seq() else
+        Seq(Depend("java", "jdk", "1.6", "m2", false, None))
       realdeps ++ fakeScalaDep ++ fakeJavaDep
     }
 
@@ -332,7 +338,7 @@ object ProjectModel {
     lazy val _srcDir = file("mono", "mcs", "class")
   }
 
-  // our root is the .csproj file rather than its containing directory
+  // we are constructed with our .csproj file rather than its containing directory
   class CSProjectModel (csproj :File) extends DefaultProjectModel(csproj.getParentFile) {
     override val flavor     = "cs"
     override def isValid    = csproj.exists
@@ -343,11 +349,12 @@ object ProjectModel {
     override def version    = _info.version
 
     override def depends = {
-      val sysdeps = if (_info.refs.exists(_.name == "monotouch"))
-        Seq(mtCoreDep) // TODO: also monotouch
-      else if (_info.refs.exists(_.name == "MonoMac")) Seq() // TODO: monomac deps?
-      else Seq() // TODO: mscorelib deps
-      sysdeps // TODO: actual project deps?
+      // TODO: do .csproj files have any notion of test dependencies?
+      val deps = _info.refs map(_.toDepend(false))
+      // if this is monotouch project, add mtCoreDep and filter out all DLL deps that it subsumes
+      if (_info.refs.exists(_.name == "monotouch"))
+        mtCoreDep +: (deps filterNot(d => mtCoreDlls(d.artifactId)))
+      else deps
     }
 
     override def applyToSource (f :Boolean => File => Unit) {
@@ -360,6 +367,27 @@ object ProjectModel {
     // override def tryGenerateDocs () = SBT.buildDocs(root)
 
     private lazy val _info = CSProj.parse(csproj)
+  }
+
+  class DllProjectModel (dll :File) extends ProjectModel(dll) {
+    override val flavor     = "dll"
+    override def isValid    = dll.isFile
+    override def isRemote   = true
+    override def name       = _info.name
+    override def groupId    = _info.name
+    override def artifactId = dll.getName dropRight ".dll".length
+    override def version    = _info.version
+    override def depends    = Seq[Depend]() // no idea!
+
+    override def applyToSource (f :Boolean => File => Unit) = f(false)(dll)
+    override protected def sourceExists (p :File => Boolean) = p(dll)
+
+    override def docUrl (loc :Loc, cs :List[String]) :String = {
+      // TODO: only for monotouch &c depends
+      s"http://docs.go-mono.com/?link=T%3a${cs.mkString(".")}%2f*"
+    }
+
+    private lazy val _info = Monodis.assemblyInfo(dll)
   }
 
   private def firstDir (dirs :File*) = dirs find(_.isDirectory)
@@ -387,7 +415,9 @@ object ProjectModel {
     root.isDirectory && loop(root)
   }
 
-  private[extract] val mtCoreDep = Depend("com.xamarin", "monotouch-core", "0", "mtcore", false)
+  private[extract] val mtCoreDep = Depend(
+    "com.xamarin", "monotouch-core", "0", "mtcore", false, None)
+  private[extract] val mtCoreDlls = Set("System", "System.Core") // TODO: moar!
 
   // TODO: allow further customization
   private def isSkipDir (dir :File) = SkipDirNames(dir.getName)

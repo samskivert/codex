@@ -48,5 +48,15 @@
       </li>
       {{/ivies}}
     </ul>
+
+    <p>DLL Projects:</p>
+    <ul>
+      {{#dlls}}
+      <li>
+        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a> :
+        {{id.groupId}} : {{id.version}}
+      </li>
+      {{/dlls}}
+    </ul>
   </body>
 </html>

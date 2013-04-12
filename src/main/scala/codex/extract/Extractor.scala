@@ -43,7 +43,8 @@ object Extractor {
     "java"  -> new ClikeExtractor("java"),
     "scala" -> new ClikeExtractor("scala"),
     "cs"    -> new ClikeExtractor("cs"),
-    "as"    -> new ClikeExtractor("as")
+    "as"    -> new ClikeExtractor("as"),
+    "dll"   -> new MonodisExtractor
   )
 }
 

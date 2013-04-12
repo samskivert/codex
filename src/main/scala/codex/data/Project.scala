@@ -27,7 +27,7 @@ class Project(
   val flavor :String,
   /** When this project was imported into the library. */
   val imported :Long,
-  /** The directory at which this project is rooted, as a string. */
+  /** The "root" of this project, usually a directory, but not always. */
   val rootPath :String
 ) extends KeyedEntity[Long] with Entity {
   import ProjectDB._
@@ -35,7 +35,7 @@ class Project(
   /** A unique identifier for this project (1 or higher). */
   val id :Long = 0L
 
-  /** The directory at which this project is rooted. */
+  /** A `File` version of [[rootPath]]. */
   lazy val root = new File(rootPath)
 
   /** This project's fully qualified (aka Maven) id, or some approximation thereof. */
@@ -254,11 +254,7 @@ class Project(
   // defer opening of our database until we need it; thousands of project objects may be created at
   // app startup time, but not that many of them will actually get queried
   private lazy val _session = {
-    val sess = DB.session(
-      _metaDir, "project", ProjectDB, 2,
-      (2, "Adding FamilyMember table",
-       Seq("create table FamilyMember (path varchar(512) not null)"))
-    )
+    val sess = DB.session(_metaDir, "project", ProjectDB, 1)
     shutdownSig onEmit { sess.close }
     sess
   }
