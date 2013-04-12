@@ -324,7 +324,10 @@ object ProjectModel {
     override def needsReindex (lastIndexed :Long) = _srcDir.lastModified > lastIndexed
     override protected def sourceExists (p :File => Boolean) = error("not used")
 
-    // TODO: special doc URL
+    override def docUrl (loc :Loc, cs :List[String]) :String = {
+      // for example: http://msdn.microsoft.com/en-us/library/system.convert.aspx
+      s"http://msdn.microsoft.com/en-us/library/${cs.mkString(".").toLowerCase}.aspx"
+    }
 
     lazy val _srcDir = file("mono", "mcs", "class")
   }
