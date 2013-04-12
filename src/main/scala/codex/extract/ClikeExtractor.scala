@@ -21,10 +21,6 @@ class ClikeExtractor (lang :String) extends Extractor {
     var curdef :String = null
     var blocks :List[String] = Nil
 
-    var last :String = null
-    var skipped = 0
-    var wantblock = false
-
     val tok = toker(reader)
     // treat # as a line comment starter in C# so that we ignore compiler directives
     if (lang == "cs") tok.commentChar('#')
