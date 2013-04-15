@@ -19,9 +19,8 @@ class Projects extends Entity {
   import ProjectsUtil._
 
   /** Returns (creating if necessary) the project that contains the supplied comp unit. */
-  def forPath (path :String) :Option[Handle[Project]] = _byPath collectFirst {
-    case (root, p) if (path startsWith(root + File.separator)) => p
-  } orElse (findRoot(new File(path)) flatMap ProjectModel.forRoot map createProject)
+  def forPath (path :String) :Option[Handle[Project]] = bestPath(path) orElse (
+    findRoot(new File(path)) flatMap ProjectModel.forRoot map createProject)
 
   /** Returns (creating if necessary) the project at the specified root. */
   def forRoot (root :File) :Option[Handle[Project]] =
@@ -53,6 +52,12 @@ class Projects extends Entity {
 
   // a backdoor to give projects easy access to their entity handle
   private[data] def handle (fqId :FqId) = _byFqId(fqId)
+
+  private def bestPath (path :String) = (("", None :Option[Handle[Project]]) /: _byPath) {
+    case ((broot, bp), (root, p)) =>
+      if (path.startsWith(root + File.separator) && (root.length > broot.length)) (root, Some(p))
+      else (broot, bp)
+  } _2
 
   private def createProject (pm :ProjectModel) = using(_session) {
     // if we already have a project with this fqId, we either need to usurp it, or take a back seat
