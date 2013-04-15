@@ -204,8 +204,15 @@ class Project(
   }
 
   private def reindexIfNeeded () {
+    // if our model's metadata is out of date, reload it and force a reindex
+    if (_model.needsReload) {
+      log.info(s"Reloading model meta $fqId")
+      _modelref = null
+      reindex()
+    }
+    // if some of the source is out of date, just reindex
+    else if (_model.needsReindex(lastIndexed)) reindex()
     // TODO: don't do this more than once a minute or so?
-    if (_model.needsReindex(lastIndexed)) reindex()
   }
 
   private def findDefnLocal[T] (name :String, kinds :Set[String], f :(Project => Loc => T),
@@ -244,7 +251,11 @@ class Project(
   private var _lastIndexed = 0L
   private lazy val _lastIndexedFile = file(_metaDir, "indexed.stamp")
 
-  private lazy val _model = ProjectModel.forProject(this)
+  private def _model = {
+    if (_modelref == null) _modelref = ProjectModel.forProject(this)
+    _modelref
+  }
+  private[this] var _modelref :ProjectModel = _
 
   private lazy val _metaDir = {
     val dir = file(metaDir, "byid", id.toString)

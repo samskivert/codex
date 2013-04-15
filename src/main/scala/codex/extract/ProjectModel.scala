@@ -64,6 +64,12 @@ abstract class ProjectModel (
     s"/doc/$flavor/$groupId/$artifactId/$version/$hackurl.html"
   }
 
+  /** Returns true if this project model should be discarded and rebuilt. Generally this means the
+    * project metadata file has changed. */
+  def needsReload :Boolean = needsReload(_loaded)
+  protected def needsReload (loaded :Long) = false
+  private val _loaded = System.currentTimeMillis
+
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */
   def needsReindex (lastIndexed :Long) = sourceExists(_.lastModified > lastIndexed)
@@ -142,6 +148,8 @@ object ProjectModel {
     override def depends = _pom.transitiveDepends(true) map { d =>
       Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test", None)
     }
+
+    override protected def needsReload (loaded :Long) = pfile.lastModified > loaded
 
     protected lazy val _pom = POM.fromFile(pfile).get
   }
@@ -263,13 +271,16 @@ object ProjectModel {
     override def hasDocs = file("target", "api").exists
     override def tryGenerateDocs () = SBT.buildDocs(root)
 
+    // TODO: if any .java file in project/ changes, we need a reload
+    override protected def needsReload (loaded :Long) = _bfile.lastModified > loaded
+
     override protected def srcDir =
       (_extracted.get("compile:source-directory") map(new File(_))) orElse super.srcDir
     override protected def testSrcDir =
       (_extracted.get("test:source-directory") map(new File(_))) orElse super.testSrcDir
 
-    // TODO: are there better ways to detect SBT?
-    private lazy val _bfile = Seq(file("build.sbt"), file("projects", "Build.scala")) find(
+    // TODO: are there better ways to detect SBT? exists(project/*.scala)?
+    private lazy val _bfile = Seq(file("build.sbt"), file("project", "Build.scala")) find(
       _.exists) getOrElse(file("build.sbt"))
 
     private lazy val _extracted = SBT.extractProps(
