@@ -5,7 +5,7 @@
 package codex.extract
 
 import java.io.{File, FileReader, FileInputStream, InputStreamReader, Reader}
-import java.util.jar.JarInputStream
+import java.util.zip.ZipInputStream
 import scala.collection.mutable.{Set => MSet}
 
 import codex._
@@ -19,17 +19,17 @@ object Extractor {
 
   /** Extracts elements from the supplied file, invoking the appropriate methods on `visitor`. */
   def extract (visitor :Visitor)(isTest :Boolean)(file :File) {
-    // if the source is a jar file, operate on its contents
-    if (file.getName.endsWith(".jar")) {
-      val jin = new JarInputStream(new FileInputStream(file))
-      var entry = jin.getNextJarEntry
+    // if the source is a jar or zip file, operate on its contents
+    if (file.getName.endsWith(".jar") || file.getName.endsWith(".zip")) {
+      val zin = new ZipInputStream(new FileInputStream(file))
+      var entry = zin.getNextEntry
       while (entry != null) {
         if (!entry.isDirectory) {
           val name = entry.getName
           Exors.get(suff(name)) foreach(
-            _.process(visitor, isTest, file.getPath + "!" + name, new InputStreamReader(jin)))
+            _.process(visitor, isTest, file.getPath + "!" + name, new InputStreamReader(zin)))
         }
-        entry = jin.getNextJarEntry
+        entry = zin.getNextEntry
       }
     }
     // otherwise it's a single source file, so process it
