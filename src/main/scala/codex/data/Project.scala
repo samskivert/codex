@@ -6,6 +6,7 @@ package codex.data
 
 import java.io.{File, IOException}
 import org.squeryl.PrimitiveTypeMode._
+import org.squeryl.annotations.Column
 import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
 import scala.annotation.tailrec
@@ -278,6 +279,7 @@ object ProjectDB extends Schema {
   /** A row in the [[compunitsT]] table. */
   case class CompUnit (
     /** The path to this unit (relative to project root). */
+    @Column(length=1024)
     path :String,
     /** Whether this compunit is in the test or main source tree. */
     isTest :Boolean
