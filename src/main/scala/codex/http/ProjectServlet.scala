@@ -42,7 +42,8 @@ class ProjectServlet extends AbstractServlet {
           flush()
 
           Map("title"   -> s"$gid - $aid - $vers",
-              "proj" -> p.fqId,
+              "id"       -> p.id,
+              "proj"     -> p.fqId,
               "flavor"  -> p.flavor,
               "indexed" -> _fmt.format(new Date(p.lastIndexed)),
               "depends" -> p.depends,
