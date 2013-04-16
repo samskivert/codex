@@ -26,6 +26,8 @@ class ProjectServlet extends AbstractServlet {
         case Some(ph) => ph request { p =>
           // force a reindex if requested
           if (rest contains "reindex") p.reindex()
+          // also (re)index if the project has never been indexed
+          else p.triggerFirstIndex()
 
           val unitBuf = ListBuffer[Map[String,AnyRef]]()
           val elems = ListBuffer[String]()
@@ -41,11 +43,17 @@ class ProjectServlet extends AbstractServlet {
           })
           flush()
 
+          // get the FqIds of all this project's family members
+          val family = for {
+            fh <- projects request(ps => p.family map(ps.forRoot) flatten)
+          } yield fh request(_.fqId)
+
           Map("title"   -> s"$gid - $aid - $vers",
-              "id"       -> p.id,
-              "proj"     -> p.fqId,
+              "id"      -> p.id,
+              "proj"    -> p.fqId,
               "flavor"  -> p.flavor,
               "indexed" -> _fmt.format(new Date(p.lastIndexed)),
+              "family"  -> family,
               "depends" -> p.depends,
               "units"   -> unitBuf)
         }

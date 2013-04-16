@@ -57,6 +57,11 @@ class Project(
     _lastIndexed
   }
 
+  /** Indexes this project immediately if it has never been indexed. */
+  def triggerFirstIndex () {
+    if (lastIndexed == 0L) reindex()
+  }
+
   /** Returns all definitions in this project's extent with the specified name.
     *
     * @param name the name of the definition. If the name is all lower case, a case insensitive
@@ -71,7 +76,7 @@ class Project(
   def findDefn[T] (name :String, kinds :Set[String], map :(Project => Loc => T)) :Iterable[T] = {
     // if we've never been updated, do a blocking rescan (we only do such on top-level projects; we
     // let the findDefnLocal trigger a non-blocking rescan on our depends)
-    if (lastIndexed == 0L) reindex()
+    triggerFirstIndex()
 
     // TODO: handle forTest
     val deps = depends filterNot(_.forTest)

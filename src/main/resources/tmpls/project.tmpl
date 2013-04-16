@@ -4,13 +4,23 @@
   </head>
   <body>
     <div>
-      <h2>{{proj.artifactId}} (id: {{id}})</h2>
+      <h2><a href="/projects" style="text-decoration: none">⇧</a>
+          {{proj.artifactId}} (id: {{id}})</h2>
 
       <p>
         <b>Organization:</b> {{proj.groupId}}<br/>
         <b>Version:</b> {{proj.version}}<br/>
         <b>Flavor:</b> {{flavor}}<br/>
         <b>Last indexed:</b> {{indexed}}<br/>
+        <b>Family:</b>
+        {{#family}}
+          <a href="/project/{{groupId}}/{{artifactId}}/{{version}}">{{artifactId}}</a>
+        {{/family}}
+        {{^family}}
+          no relations
+        {{/family}}<br/>
+      </p>
+      <p>
         <a href="/project/{{proj.groupId}}/{{proj.artifactId}}/{{proj.version}}/delete">
           [delete]</a><br/>
       </p>
