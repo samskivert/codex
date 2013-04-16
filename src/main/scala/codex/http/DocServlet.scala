@@ -74,12 +74,15 @@ class DocServlet extends AbstractServlet {
   }
 
   private def sendFileDoc (rsp :HSResponse, file :File) {
-    rsp.setContentType(getServletContext.getMimeType(file.getName))
-    val buf = ByteBuffer.allocate(4*1024)
-    val source = new FileInputStream(file).getChannel
-    try {
-      source.transferTo(0, Long.MaxValue, Channels.newChannel(rsp.getOutputStream))
-    } finally source.close()
+    if (!file.exists) errNotFound(s"File does not exist: $file")
+    else {
+      rsp.setContentType(getServletContext.getMimeType(file.getName))
+      val buf = ByteBuffer.allocate(4*1024)
+      val source = new FileInputStream(file).getChannel
+      try {
+        source.transferTo(0, Long.MaxValue, Channels.newChannel(rsp.getOutputStream))
+      } finally source.close()
+    }
   }
 
   private val m2Root = file(home, ".m2", "repository")
