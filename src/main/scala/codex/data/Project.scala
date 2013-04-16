@@ -223,7 +223,7 @@ class Project(
   private def findDefnLocal[T] (name :String, kinds :Set[String], f :(Project => Loc => T),
                                 incTest :Boolean) = {
     // queue ourselves up for a reindex check every time we're searched
-    projects invoke(_ handle(fqId) invoke(_ reindexIfNeeded()))
+    projects invoke(_ handle(id) invoke(_ reindexIfNeeded()))
 
     // log.info(s"Seeking $name in ${this.name}")
     val mixedCase = name.toLowerCase != name

@@ -24,9 +24,9 @@ class ProjectsServlet extends AbstractServlet {
 
     case _ =>
       val byType = projects request(_ ids) groupBy {
-        case (_, path) if (path.contains(".m2"))  => "m2"
-        case (_, path) if (path.contains(".ivy")) => "ivy"
-        case (_, path) if (path.endsWith(".dll")) => "dll"
+        case (_, _, path) if (path.contains(".m2"))  => "m2"
+        case (_, _, path) if (path.contains(".ivy")) => "ivy"
+        case (_, _, path) if (path.endsWith(".dll")) => "dll"
         case _ => "local"
       }
 
@@ -49,10 +49,11 @@ class ProjectsServlet extends AbstractServlet {
       })
   }
 
-  private case class Info (id :FqId, path :String) {
-    def name = if (id.artifactId endsWith "-project") id.artifactId dropRight "-project".length
-               else if (id.artifactId endsWith "-parent") id.artifactId dropRight "-parent".length
-               else id.artifactId
-    lazy val sortKey = id.artifactId.toLowerCase
+  private case class Info (id :Long, fqId :FqId, path :String) {
+    def name =
+      if (fqId.artifactId endsWith "-project") fqId.artifactId dropRight "-project".length
+      else if (fqId.artifactId endsWith "-parent") fqId.artifactId dropRight "-parent".length
+      else fqId.artifactId
+    lazy val sortKey = fqId.artifactId.toLowerCase
   }
 }

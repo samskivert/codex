@@ -6,13 +6,13 @@
     <h3>Local Projects:</h3>
     <table>
       {{#locs}}
-      <form action="/query/doc/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">
+      <form action="/query/doc/{{fqId.groupId}}/{{fqId.artifactId}}/{{fqId.version}}">
         <tr>
           <td align="right">
-            <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{name}}</a>
+            <a href="/project/{{id}}">{{name}}</a>
           </td>
           <td><input type="text" name="q"/></td>
-          <td>{{id.version}}</td>
+          <td>{{fqId.version}}</td>
           <td>{{path}}</td>
         </tr>
       </form>
@@ -33,8 +33,7 @@
     <ul>
       {{#m2s}}
       <li>
-        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a> :
-        {{id.groupId}} : {{id.version}}
+        <a href="/project/{{id}}">{{fqId.artifactId}}</a> : {{fqId.groupId}} : {{fqId.version}}
       </li>
       {{/m2s}}
     </ul>
@@ -43,8 +42,7 @@
     <ul>
       {{#ivies}}
       <li>
-        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a> :
-        {{id.groupId}} : {{id.version}}
+        <a href="/project/{{id}}">{{fqId.artifactId}}</a> : {{fqId.groupId}} : {{fqId.version}}
       </li>
       {{/ivies}}
     </ul>
@@ -53,8 +51,7 @@
     <ul>
       {{#dlls}}
       <li>
-        <a href="/project/{{id.groupId}}/{{id.artifactId}}/{{id.version}}">{{id.artifactId}}</a> :
-        {{id.groupId}} : {{id.version}}
+        <a href="/project/{{id}}">{{fqId.artifactId}}</a> : {{fqId.groupId}} : {{fqId.version}}
       </li>
       {{/dlls}}
     </ul>

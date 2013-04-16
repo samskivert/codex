@@ -14,15 +14,20 @@ import codex.data.{Depend, FqId}
 class ProjectServlet extends AbstractServlet {
 
   override def process (ctx :Context) = ctx.args match {
-    case Seq(gid, aid, vers, "delete") =>
-      val fqId = FqId(gid, aid, vers)
-      projects invoke(_ delete(fqId))
+    case Seq(id, "delete") =>
+      projects invoke(_ delete(id.toLong))
       ctx.rsp.sendRedirect("/projects")
 
     case Seq(gid, aid, vers, rest @ _*) =>
       val fqId = FqId(gid, aid, vers)
       val data = projects request(_ forId(fqId)) match {
         case None     => errNotFound(s"Unknown project $fqId")
+        case Some(ph) => ctx.rsp.sendRedirect(s"/project/${ph request(_ id)}")
+      }
+
+    case Seq(id, rest @ _*) =>
+      val data = projects request(_ forId(id.toLong)) match {
+        case None     => errNotFound(s"Unknown project $id")
         case Some(ph) => ph request { p =>
           // force a reindex if requested
           if (rest contains "reindex") p.reindex()
@@ -48,8 +53,7 @@ class ProjectServlet extends AbstractServlet {
             fh <- projects request(ps => p.family map(ps.forRoot) flatten)
           } yield fh request(_.fqId)
 
-          Map("title"   -> s"$gid - $aid - $vers",
-              "id"      -> p.id,
+          Map("id"      -> p.id,
               "proj"    -> p.fqId,
               "flavor"  -> p.flavor,
               "indexed" -> _fmt.format(new Date(p.lastIndexed)),

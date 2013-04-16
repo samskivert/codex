@@ -33,17 +33,21 @@ class Projects extends Entity {
   /** Returns the project for the supplied fqId or `None` if no such project is known. */
   def forId (fqId :FqId) :Option[Handle[Project]] = _byFqId get fqId
 
-  /** Returns (fqId, rootPath) for all known projects. */
-  def ids :Iterable[(FqId,String)] = using(_session) {
-    projects map(p => (p.fqId, p.rootPath))
+  /** Returns the project for the supplied id or `None` if no such project is known. */
+  def forId (id :Long) :Option[Handle[Project]] = _byId get id
+
+  /** Returns (id, fqId, rootPath) for all known projects. */
+  def ids :Iterable[(Long, FqId,String)] = using(_session) {
+    projects map(p => (p.id, p.fqId, p.rootPath))
   }
 
   /** Deletes the project with the specified `fqId`. */
-  def delete (fqId :FqId) {
-    _byFqId remove(fqId) match {
-      case None => log.warning("Can't delete unknown project", "fqId", fqId)
+  def delete (id :Long) {
+    _byId remove(id) match {
+      case None => log.warning("Can't delete unknown project", "id", id)
       case Some(ph) =>
-        val (id, path) = ph request(p => (p.id, p.rootPath))
+        val (fqId, path) = ph request(p => (p.fqId, p.rootPath))
+        _byFqId -= fqId
         _byPath -= path
         using(_session) { projects delete(id) }
         ph invoke(_.delete())
@@ -51,7 +55,7 @@ class Projects extends Entity {
   }
 
   // a backdoor to give projects easy access to their entity handle
-  private[data] def handle (fqId :FqId) = _byFqId(fqId)
+  private[data] def handle (id :Long) = _byId(id)
 
   private def bestPath (path :String) = (("", None :Option[Handle[Project]]) /: _byPath) {
     case ((broot, bp), (root, p)) =>
@@ -68,10 +72,10 @@ class Projects extends Entity {
       case None => stockFqId
       case Some(ph) =>
         // if we're local and the other project is remote; delete the other project
-        val (otherRemote, otherRoot) = ph request(p => (p.isRemote, p.rootPath))
+        val (otherId, otherRemote, otherRoot) = ph request(p => (p.id, p.isRemote, p.rootPath))
         if (otherRemote && !pm.isRemote) {
           log.info(s"Usurping remote $stockFqId with local", "usurper", pm.root)
-          delete(stockFqId)
+          delete(otherId)
           stockFqId
         }
         // else we're both local, so tack a conflict resolving suffix onto our version
@@ -105,10 +109,12 @@ class Projects extends Entity {
   private def map (p :Project) = {
     val pe = entity(p)
     if (!p.isRemote) _byPath += (p.rootPath -> pe)
+    _byId += (p.id -> pe)
     _byFqId += (p.fqId -> pe)
     pe
   }
 
+  private val _byId = MMap[Long,Handle[Project]]()
   private val _byPath = MMap[String,Handle[Project]]()
   private val _byFqId = MMap[FqId,Handle[Project]]()
   private val _session = DB.session(codex.metaDir, "projects", ProjectsDB, 1)

@@ -1,6 +1,6 @@
 <html>
   <head>
-    <title>Codex: {{title}}</title>
+    <title>Codex: {{proj.groupId}} - {{proj.artifactId}} - {{proj.version}}</title>
   </head>
   <body>
     <div>
@@ -21,7 +21,7 @@
         {{/family}}<br/>
       </p>
       <p>
-        <a href="/project/{{proj.groupId}}/{{proj.artifactId}}/{{proj.version}}/delete">
+        <a href="/project/{{id}}/delete">
           [delete]</a><br/>
       </p>
 
