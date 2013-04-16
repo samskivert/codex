@@ -29,15 +29,30 @@ class ProjectsServlet extends AbstractServlet {
         case (_, path) if (path.endsWith(".dll")) => "dll"
         case _ => "local"
       }
+
+      // omit local projects that share a path prefix with an existing project (they should show up
+      // in the "family" of that top-level project); TODO: actually require that said projects are
+      // in the top-level project's family
+      val locals = byType.get("local").toSeq flatMap(_ map Info.tupled)
+      val filtLocals = (Seq[Info]() /: (locals sortBy(_.path))) {
+        case (Seq(), info) => Seq(info)
+        case (acc,   info) => if (info.path startsWith acc.last.path) acc
+                              else acc :+ info
+      }
+
       ctx.success(Templates.tmpl("projects.tmpl"), new AnyRef {
         // TODO: sort local projects by last accessed then alphabetically?
-        // TODO: group local projects by family patriarch
-        def locs = byType.get("local").toSeq flatMap (_ map Info.tupled) sortBy(_.id.artifactId)
-        def m2s = byType.get("m2").toSeq flatMap(_ map Info.tupled) sortBy(_.id.artifactId)
-        def ivies = byType.get("ivy").toSeq flatMap(_ map Info.tupled) sortBy(_.id.artifactId)
-        def dlls = byType.get("dll").toSeq flatMap(_ map Info.tupled) sortBy(_.id.artifactId)
+        def locs = filtLocals sortBy(_.sortKey)
+        def m2s = byType.get("m2").toSeq flatMap(_ map Info.tupled) sortBy(_.sortKey)
+        def ivies = byType.get("ivy").toSeq flatMap(_ map Info.tupled) sortBy(_.sortKey)
+        def dlls = byType.get("dll").toSeq flatMap(_ map Info.tupled) sortBy(_.sortKey)
       })
   }
 
-  private case class Info (id :FqId, path :String)
+  private case class Info (id :FqId, path :String) {
+    def name = if (id.artifactId endsWith "-project") id.artifactId dropRight "-project".length
+               else if (id.artifactId endsWith "-parent") id.artifactId dropRight "-parent".length
+               else id.artifactId
+    lazy val sortKey = id.artifactId.toLowerCase
+  }
 }
