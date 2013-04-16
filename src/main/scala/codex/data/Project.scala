@@ -79,20 +79,16 @@ class Project(
     triggerFirstIndex()
 
     // TODO: handle forTest
-    val deps = depends filterNot(_.forTest)
-    val rels = family
+    val (deps, rels) = (depends filterNot(_.forTest), family)
     log.info(s"${this.name} (${deps.size} depends, ${rels.size} relations) findDefn: $name")
 
     // TODO: return results incrementally?
 
-    // search this project, its transitive depends and relations (this will auto-create projects
+    // search this project and its transitive depends + relations (this will auto-create projects
     // for our transitive dependencies and relations if they don't already exist)
-    findDefnLocal(name, kinds, map, true) ++ projects.request { ps =>
-      (for { dh  <- deps flatMap ps.forDep
-             loc <- dh request(_ findDefnLocal(name, kinds, map, false)) } yield loc) ++
-      (for { rh  <- rels flatMap ps.forRoot
-             loc <- rh request(_ findDefnLocal(name, kinds, map, false)) } yield loc)
-    }
+    val (dephs, relhs) = projects.request(ps => (deps flatMap ps.forDep, rels flatMap ps.forRoot))
+    findDefnLocal(name, kinds, map, true) ++ ((dephs ++ relhs).distinct flatMap(
+      _ request(_ findDefnLocal(name, kinds, map, false))))
     // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
 
