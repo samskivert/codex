@@ -6,7 +6,7 @@
     <h3>Local Projects:</h3>
     <table>
       {{#locs}}
-      <form action="/query/doc/{{fqId.groupId}}/{{fqId.artifactId}}/{{fqId.version}}">
+      <form action="/query/doc/{{fqId.path}}">
         <tr>
           <td align="right">
             <a href="/project/{{id}}">{{name}}</a>

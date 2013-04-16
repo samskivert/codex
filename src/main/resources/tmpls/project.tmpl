@@ -13,23 +13,18 @@
         <b>Flavor:</b> {{flavor}}<br/>
         <b>Last indexed:</b> {{indexed}}<br/>
         <b>Family:</b>
-        {{#family}}
-          <a href="/project/{{groupId}}/{{artifactId}}/{{version}}">{{artifactId}}</a>
-        {{/family}}
-        {{^family}}
-          no relations
-        {{/family}}<br/>
+        {{#family}} <a href="/project/{{path}}">{{artifactId}}</a>{{/family}}
+        {{^family}}no relations{{/family}}<br/>
       </p>
       <p>
-        <a href="/project/{{id}}/delete">
-          [delete]</a><br/>
+        <a href="/project/{{id}}/delete">[delete]</a><br/>
       </p>
 
       <b>Depends:</b><br/>
       <ul>
         {{#depends}}
         <li>
-          <a href="/project/{{groupId}}/{{artifactId}}/{{version}}">{{artifactId}}</a> -
+          <a href="/project/{{toFqId.path}}">{{artifactId}}</a> -
           {{version}} -
           {{groupId}}{{#forTest}} - test{{/forTest}}
         </li>
