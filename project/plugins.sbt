@@ -1,4 +1,4 @@
-libraryDependencies += "com.samskivert" % "sbt-pom-util" % "0.4-SNAPSHOT"
+libraryDependencies += "com.samskivert" % "sbt-pom-util" % "0.4"
 
 addSbtPlugin("io.spray" % "sbt-revolver" % "0.6.2")
 
