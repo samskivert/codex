@@ -41,6 +41,25 @@ class Projects extends Entity {
     projects map(p => (p.id, p.fqId, p.rootPath))
   }
 
+  /** Updates the version number of the project with the specified id. This unmaps the project with
+    * its current version, reresolves it with its new version and forces a reindex. */
+  def reversion (p :Project, newVers :String) {
+    _byId remove(p.id) match {
+      case None => log.warning("Can't reversion unknown project", "id", p.id, "newVers", newVers)
+      case Some(ph) =>
+        _byFqId -= p.fqId
+        _byPath -= p.rootPath
+        using(_session) {
+          // update the project's version in the projects table
+          update(projects)(pj => where(pj.id === p.id) set(pj.version := newVers))
+          // now reload the project record, remap it, and trigger a reindex
+          projects lookup(p.id)
+        } map(map) foreach(_ invoke(_.reindex()))
+        // close down the old resolved version of the project
+        ph invoke(_.close())
+    }
+  }
+
   /** Deletes the project with the specified `fqId`. */
   def delete (id :Long) {
     _byId remove(id) match {

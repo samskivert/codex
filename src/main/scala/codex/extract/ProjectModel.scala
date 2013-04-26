@@ -138,6 +138,32 @@ object ProjectModel {
                                         file("src", "tests"), file("tests"))
   }
 
+  class JavaHomeProjectModel (root :File) extends ProjectModel(root) {
+    override val flavor     = "jdk"
+    override def isValid    = root.isDirectory
+    override def isRemote   = true
+    override def name       = "jdk"
+    override def groupId    = "java"
+    override def artifactId = "jdk"
+    override def version    = _version
+    override def depends    = Seq()
+    override def hasDocs    = true
+
+    override def applyToSource (f :Boolean => File => Unit) {
+      f(false)(file("src.zip"))
+    }
+
+    override def docUrl (loc :Loc, cs :List[String]) :String = {
+      "todo" // route to oracle's website?
+    }
+
+    // def needsReindex (lastIndexed :Long) = sourceExists(_.lastModified > lastIndexed)
+    override protected def sourceExists (p :File => Boolean) = false // TODO
+
+    import scala.sys.process._
+    protected lazy val _version = Seq(file("bin", "java").getPath, "-fullversion") !!
+  }
+
   abstract class POMProjectModel (root :File, val pfile :File) extends ProjectModel(root) {
     override def isValid    = pfile.exists
     override def name       = _pom.name getOrElse root.getName

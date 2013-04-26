@@ -179,6 +179,11 @@ class Project(
 
   override def toString = s"[id=$id, name=$name, vers=$version, root=$rootPath]"
 
+  private[data] def close () {
+    // close our database session
+    _session.close
+  }
+
   private[data] def delete () {
     log.info(s"Deleting project metadata: ${_metaDir}")
     // close our database session
@@ -207,9 +212,16 @@ class Project(
   private def reindexIfNeeded () {
     // if our model's metadata is out of date, reload it and force a reindex
     if (_model.needsReload) {
-      log.info(s"Reloading model meta $fqId")
       _modelref = null
-      reindex()
+      // if our version changed, we need to update the projects table and do a full reload
+      val mversion = _model.version
+      if (mversion != version) {
+        log.info(s"Model version changed, reversioning $fqId as $mversion")
+        projects invoke(_ reversion(this, mversion))
+      } else {
+        log.info(s"Model meta updated, reindexing $fqId")
+        reindex()
+      }
     }
     // if some of the source is out of date, just reindex
     else if (_model.needsReindex(lastIndexed)) reindex()
