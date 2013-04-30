@@ -211,7 +211,7 @@ class Project(
 
   private def reindexIfNeeded () {
     // if our model's metadata is out of date, reload it and force a reindex
-    if (_model.needsReload) {
+    if (_model.needsReload(lastIndexed)) {
       _modelref = null
       // if our version changed, we need to update the projects table and do a full reload
       val mversion = _model.version

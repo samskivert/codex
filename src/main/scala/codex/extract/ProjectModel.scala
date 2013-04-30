@@ -66,9 +66,7 @@ abstract class ProjectModel (
 
   /** Returns true if this project model should be discarded and rebuilt. Generally this means the
     * project metadata file has changed. */
-  def needsReload :Boolean = needsReload(_loaded)
-  protected def needsReload (loaded :Long) = false
-  private val _loaded = System.currentTimeMillis
+  def needsReload (lastLoaded :Long) = false
 
   /** Returns true if this project should be reindexed.
     * @param lastIndexed the time at which the project was last indexed. */
@@ -175,7 +173,7 @@ object ProjectModel {
       Depend(d.groupId, d.artifactId, d.version, "m2", d.scope == "test", None)
     }
 
-    override protected def needsReload (loaded :Long) = pfile.lastModified > loaded
+    override def needsReload (lastLoaded :Long) = pfile.lastModified > lastLoaded
 
     protected lazy val _pom = POM.fromFile(pfile).get
   }
@@ -298,7 +296,7 @@ object ProjectModel {
     override def tryGenerateDocs () = SBT.buildDocs(root)
 
     // TODO: if any .java file in project/ changes, we need a reload
-    override protected def needsReload (loaded :Long) = _bfile.lastModified > loaded
+    override def needsReload (lastLoaded :Long) = _bfile.lastModified > lastLoaded
 
     override protected def srcDir =
       (_extracted.get("compile:source-directory") map(new File(_))) orElse super.srcDir
