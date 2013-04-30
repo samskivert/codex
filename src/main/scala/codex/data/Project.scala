@@ -80,7 +80,7 @@ class Project(
 
     // TODO: handle forTest
     val (deps, rels) = (depends filterNot(_.forTest), family)
-    log.info(s"${this.name} (${deps.size} depends, ${rels.size} relations) findDefn: $name")
+    log.info(s"${this.name} $id (${deps.size} depends, ${rels.size} relations) findDefn: $name")
 
     // TODO: return results incrementally?
 
