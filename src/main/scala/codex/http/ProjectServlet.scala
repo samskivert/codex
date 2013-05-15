@@ -55,6 +55,7 @@ class ProjectServlet extends AbstractServlet {
 
           Map("id"      -> p.id,
               "proj"    -> p.fqId,
+              "path"    -> p.rootPath,
               "flavor"  -> p.flavor,
               "indexed" -> _fmt.format(new Date(p.lastIndexed)),
               "family"  -> family,
