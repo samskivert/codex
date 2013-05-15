@@ -37,7 +37,7 @@
     </dependency>
     <dependency>
       <groupId>com.samskivert</groupId>
-      <artifactId>pom-util</artifactId>
+      <artifactId>pom-util_2.10</artifactId>
       <version>0.5-SNAPSHOT</version>
     </dependency>
     <dependency>
