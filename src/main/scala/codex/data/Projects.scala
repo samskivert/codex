@@ -97,7 +97,13 @@ class Projects extends Entity {
           delete(otherId)
           stockFqId
         }
-        // else we're both local, so tack a conflict resolving suffix onto our version
+        // else we're both local; if the other project's root no longer exists; usurp it
+        else if (!new File(otherRoot).exists) {
+          log.info(s"Usurping obsolete local $stockFqId", "obsolete", otherRoot, "usurper", pm.root)
+          delete(otherId)
+          stockFqId
+        }
+        // otherwise we're both valid local projects; tack a -N suffix onto our version
         else {
           var suff = 1
           var newFqId = stockFqId dedupe(suff)
