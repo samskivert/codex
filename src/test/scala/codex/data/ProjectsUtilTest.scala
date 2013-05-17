@@ -25,5 +25,13 @@ class ProjectsUtilTest {
       assertEquals(Some(file(docwiz, "AppleDocWizard.csproj")), findRoot(docwiz))
       assertEquals(Some(file(docwiz, "AppleDocWizard.csproj")), findRoot(file(docwiz, "bin")))
     }
+
+    val bareroot = file(home, "ops", "Entity-System-RDBMS-Beta--Java-")
+    val bareproj = file(bareroot, "EntitySystemJava", "src")
+    if (bareproj.isDirectory) {
+      // TODO: it would be nice if we called the directory with a src subdir root rather than the
+      // top-level (which contains the .git directory)
+      assertEquals(Some(bareroot), findRoot(bareproj))
+    }
   }
 }

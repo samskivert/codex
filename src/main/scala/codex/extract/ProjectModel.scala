@@ -376,7 +376,7 @@ object ProjectModel {
   // we are constructed with our .csproj file rather than its containing directory
   class CSProjectModel (csproj :File) extends DefaultProjectModel(csproj.getParentFile) {
     override val flavor     = "cs"
-    override def isValid    = csproj.exists
+    override def isValid    = csproj.getName.endsWith(".csproj") && csproj.isFile
     override def isRemote   = false
     override def name       = csproj.getName dropRight ".csproj".length
     override def groupId    = _info.rootNamespace
