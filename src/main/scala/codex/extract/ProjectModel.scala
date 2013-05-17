@@ -131,7 +131,7 @@ object ProjectModel {
     protected def sourceExists (p :File => Boolean) =
       (srcDir map(exists(p)) getOrElse false) || (testSrcDir map(exists(p)) getOrElse false)
 
-    protected def srcDir = firstDir(file("src", "main"), file("src"))
+    protected def srcDir = firstDir(file("src", "main"), file("src"), file("."))
     protected def testSrcDir = firstDir(file("src", "test"), file("test"),
                                         file("src", "tests"), file("tests"))
   }
