@@ -171,5 +171,6 @@ object ProjectsUtil {
     } orElse findRoot(curDir.getParentFile)
 
   // TODO: expand this and/or specialize it based on the suffix of the candidate file
-  private val RootFiles = Set(".git", ".hg", "build.xml", "pom.xml", "build.sbt", "Makefile")
+  private val RootFiles = Set(".git", ".hg", "build.xml", "pom.xml", "build.sbt", "Makefile",
+                              ".classpath", ".project")
 }
