@@ -83,6 +83,8 @@ class Projects extends Entity {
   } _2
 
   private def createProject (pm :ProjectModel) = using(_session) {
+    log.info("Creating project", "flavor", pm.flavor, "path", pm.root)
+
     // if we already have a project with this fqId, we either need to usurp it, or take a back seat
     // to it; in the former case, we mutate the existing project's version and take the "stock"
     // version for ourselves, in the latter case we just register ourselves with a mutated version
