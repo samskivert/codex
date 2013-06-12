@@ -188,8 +188,8 @@ object ProjectModel {
       val haveRealJava = realdeps.exists(d => d.groupId == "java" && d.artifactId == "jdk")
       val haveRealScala = realdeps.exists(d => d.groupId == "org.scala-lang" &&
         d.artifactId == "scala-library")
-      val haveScalaSource = codex.file(_srcDir, "scala").exists
-      val haveJavaSource = codex.file(_srcDir, "java").exists
+      val haveScalaSource = sourceExists(_.getName.endsWith(".scala"))
+      val haveJavaSource = sourceExists(_.getName.endsWith(".java"))
       // TODO: get versions from POM
       val fakeScalaDep = if (haveScalaSource && !haveRealScala)
         Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "m2", false, None)) else Seq()
