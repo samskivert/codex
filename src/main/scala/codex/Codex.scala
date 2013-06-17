@@ -38,13 +38,16 @@ object Codex {
     if (appdir.isDefined) initTray()
 
     // if we're running via Getdown, redirect our log output to a file
-    appdir foreach { ad =>
+    if (appdir.isDefined) {
+      val homeLogDir = file(home, "Library", "Logs")
+      val logDir = if (homeLogDir.exists) homeLogDir else appdir.get
+
       // first delete any previous previous log file
-      val olog = file(ad, "old-codex.log")
+      val olog = file(logDir, "old-codex.log")
       if (olog.exists) olog.delete
 
       // next rename the previous log file
-      val nlog = file(ad, "codex.log")
+      val nlog = file(logDir, "codex.log")
       if (nlog.exists) nlog.renameTo(olog)
 
       // and now redirect our output
