@@ -46,10 +46,10 @@ class Project(
   def isRemote = _model.isRemote
 
   /** Returns this project's complete transitive dependency set. */
-  def depends :Seq[Depend] = using(_session) { dependsT.toList }
+  def depends :Seq[Depend] = using(_session) { dependsT.allRows.toList }
 
   /** Returns this project's family members. */
-  def family :Seq[File] = using(_session) { familyMembersT.toList.map(_.toFile) }
+  def family :Seq[File] = using(_session) { familyMembersT.allRows.map(_.toFile).toList }
 
   /** Returns the time at which this project was last indexed. */
   def lastIndexed = {
@@ -114,8 +114,8 @@ class Project(
     * by its children elements, and so forth (a depth-first traversal).
     */
   def visit (viz :Viz) {
-    val units = using(_session) { compunitsT.toList }
-    val elems = using(_session) { elementsT.toSeq groupBy(_.unitId) }
+    val units = using(_session) { compunitsT.allRows.toList }
+    val elems = using(_session) { elementsT.allRows groupBy(_.unitId) }
 
     units.sortBy(_.path) foreach { u =>
       viz.onCompUnit(u.id, u.path)

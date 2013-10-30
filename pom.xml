@@ -37,8 +37,8 @@
     </dependency>
     <dependency>
       <groupId>com.samskivert</groupId>
-      <artifactId>pom-util_2.10</artifactId>
-      <version>0.5-SNAPSHOT</version>
+      <artifactId>pom-util_2.9.2</artifactId>
+      <version>0.6-SNAPSHOT</version>
     </dependency>
     <dependency>
       <groupId>com.samskivert</groupId>
@@ -53,7 +53,7 @@
     <dependency>
       <groupId>org.squeryl</groupId>
       <artifactId>squeryl_2.10</artifactId>
-      <version>0.9.5-6</version>
+      <version>0.9.6-RC1</version>
     </dependency>
     <dependency>
       <groupId>com.h2database</groupId>

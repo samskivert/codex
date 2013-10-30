@@ -38,7 +38,7 @@ class Projects extends Entity {
 
   /** Returns (id, fqId, rootPath) for all known projects. */
   def ids :Iterable[(Long, FqId,String)] = using(_session) {
-    projects map(p => (p.id, p.fqId, p.rootPath))
+    projects.allRows map(p => (p.id, p.fqId, p.rootPath))
   }
 
   /** Updates the version number of the project with the specified id. This unmaps the project with
@@ -147,7 +147,7 @@ class Projects extends Entity {
   private val _session = DB.session(codex.metaDir, "projects", ProjectsDB, 1)
 
   // map all of our existing known projects
-  using(_session) { projects foreach map }
+  using(_session) { projects.allRows foreach map }
   // close our session on shutdown
   shutdownSig.onEmit { _session.close }
 }
