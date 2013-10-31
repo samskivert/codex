@@ -1,27 +1,26 @@
 import sbt._
 
 object CodexBuild extends Build {
-  import ProguardPlugin._
   import java.io.File
   import sbt.Keys._
+  import com.typesafe.sbt.SbtProguard._
   import com.threerings.getdown.tools.Digester
-
-  val passThroughLibs = TaskKey[Seq[File]](
-    "passthrough-libs", "Library dependencies that we don't Proguard and put straight into Getdown")
 
   val getdown = TaskKey[Unit]("getdown", "Generates Getdown client")
   private def getdownTask = (sourceDirectory in Compile, dependencyClasspath in Compile,
-                             passThroughLibs in Compile, minJarPath in Compile, target,
-                             streams) map {
-    (srcDir, depCP, passLibs, minJarPath, target, s) =>
+                             artifactPath in Proguard, target, streams) map {
+    (srcDir, depCP, minJarPath, target, s) =>
 
     val dest = (target / "getdown").asFile
     def copy (files :Iterable[File]) = IO.copy(files.map(src => (src.asFile, dest / src.getName)))
 
     // copy our metadata files
     copy((srcDir / "getdown" * "*").get)
-    // copy our non-proguarded libs
-    copy(passLibs)
+    // copy our non-proguarded libs (and strip their Ivy/Maven version in the process)
+    for (passLib <- depCP ; if (passThrough(passLib.data))) {
+      val tgtName = passLib.get(moduleID.key).get.name + ".jar"
+      IO.copy(Seq((passLib.data, dest / tgtName)))
+    }
     // copy our elisp files
     IO.copy((srcDir / "elisp" * "*").get.map(src => (src.asFile, dest / "elisp" / src.getName)))
 
@@ -47,6 +46,8 @@ object CodexBuild extends Build {
     "rsync -avr " + dest + "/ samskivert.com:/export/samskivert/pages/codex/client" ! ; ()
   }
 
+  val passThrough = (_ :File).getName startsWith "scala-library"
+
   val codexSettings = seq(
     autoScalaLibrary := false, // we get scala-library from the POM
     crossPaths := false,
@@ -56,27 +57,46 @@ object CodexBuild extends Build {
     libraryDependencies += "com.novocode" % "junit-interface" % "0.7" % "test->default",
 
     // various proguard jiggery pokery
-    proguardOptions := Seq(
-      keepMain("codex.Codex"),
-      "-keep public class net.sf.cglib.** { *; }",
-      "-keep public class codex.** { *; }",
-      "-keep class org.squeryl.** { *; }",
+    ProguardKeys.options in Proguard += ProguardOptions.keepMain("codex.Codex"),
+    ProguardKeys.options in Proguard ++= Seq(
+      "-dontoptimize",
+      "-dontobfuscate",
       "-keep class net.sf.cglib.** { *; }",
+      "-keep class org.squeryl.** { *; }",
       "-keep class scala.Function1",
-      "-dontnote scala.**"
+      "-keep public class codex.** { *; }",
+      "-dontwarn net.sf.cglib.**",
+      "-dontwarn samscala.util.Log*",
+      "-dontwarn com.threerings.getdown.tools.**",
+      "-dontwarn com.threerings.getdown.launcher.**",
+      "-dontwarn com.threerings.getdown.launcher.GetdownApplet",
+      "-dontnote org.squeryl.internals.**",
+      "-dontnote org.h2.**",
+      "-dontwarn org.h2.fulltext.**",
+      "-dontwarn org.h2.jcr.Railroads",
+      "-dontwarn org.h2.message.TraceWriterAdapter",
+      "-dontwarn org.h2.util.DbDriverActivator",
+      "-dontnote org.eclipse.**",
+      "-dontwarn org.eclipse.jetty.util.log.**",
+      "-dontwarn org.eclipse.jetty.server.handler.jmx.**",
+      "-dontwarn org.eclipse.jetty.server.jmx.**",
+      "-dontwarn org.eclipse.jetty.server.session.jmx.**",
+      "-dontwarn org.eclipse.jetty.servlet.jmx.**",
+      "-dontwarn ch.epfl.lamp.compiler.**",
+      "-dontnote scala.**",
+      "-dontwarn scala.**"
     ),
-    proguardInJars := Seq(),
-    passThroughLibs <<= (dependencyClasspath in Compile) map (_ map(_.data) collect {
-      case file if (file.getName startsWith "scala-library") => file
-    }),
-    proguardLibraryJars <++= passThroughLibs,
-    makeInJarFilter <<= (makeInJarFilter) { (makeInJarFilter) => { (file) => file match {
-      case "javax.servlet-3.0.0.v201112011016.jar" => makeInJarFilter(file) + ",!META-INF/**"
-      case _ => makeInJarFilter(file)
-    }}},
+    ProguardKeys.inputs in Proguard ~= { _ filterNot passThrough },
+    ProguardKeys.inputFilter in Proguard := { _.name match {
+      case nm if (nm.startsWith("jetty-"))        => Some("!META-INF/MANIFEST.MF,!*.html")
+      case nm if (nm.startsWith("javax.servlet")) => Some("!META-INF/**")
+      case _                                      => Some("!META-INF/MANIFEST.MF")
+    }},
+    // for fuck's sake sbt and sbt-proguard authors!
+    javaOptions in (Proguard, ProguardKeys.proguard) := Seq("-mx1024M"),
 
     // tasks for generating and uploading getdown client
-    getdown <<= getdownTask dependsOn proguard,
+    getdown <<= getdownTask, // dependsOn (Proguard, ProguardKeys.proguard),
     upload  <<= uploadTask dependsOn getdown
   )
 
@@ -84,7 +104,8 @@ object CodexBuild extends Build {
     Project.defaultSettings ++
     samskivert.POMUtil.pomToSettings("pom.xml") ++
     proguardSettings ++
-    codexSettings ++
-    spray.revolver.RevolverPlugin.Revolver.settings
+    net.virtualvoid.sbt.graph.Plugin.graphSettings ++
+    spray.revolver.RevolverPlugin.Revolver.settings ++
+    codexSettings
   })
 }
