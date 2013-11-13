@@ -7,6 +7,7 @@
       <h2><a href="/projects" style="text-decoration: none">&#8679;</a>
           {{proj.artifactId}} (id: {{id}})</h2>
 
+      <form action="/query/doc/{{proj.path}}">
       <p>
         <b>Organization:</b> {{proj.groupId}}<br/>
         <b>Version:</b> {{proj.version}}<br/>
@@ -16,7 +17,9 @@
         <b>Family:</b>
         {{#family}} <a href="/project/{{path}}">{{artifactId}}</a>{{/family}}
         {{^family}}no relations{{/family}}<br/>
+        <b>Search:</b> <input type="text" name="q"/><br/>
       </p>
+      </form>
       <p>
         <a href="/project/{{id}}/delete">[delete]</a><br/>
       </p>
