@@ -1,8 +1,6 @@
-libraryDependencies += "com.samskivert" % "sbt-pom-util" % "0.6-SNAPSHOT"
+libraryDependencies += "com.samskivert" % "sbt-pom-util" % "0.6"
 
 addSbtPlugin("io.spray" % "sbt-revolver" % "0.7.1")
-
-// resolvers += Resolver.url("sbt-plugin-releases-scalasbt", url("http://repo.scala-sbt.org/scalasbt/sbt-plugin-releases/"))(Resolver.ivyStylePatterns)
 
 addSbtPlugin("com.typesafe.sbt" % "sbt-proguard" % "0.2.2")
 
