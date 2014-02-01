@@ -101,6 +101,7 @@ object ProjectModel {
     case "dll"    => new DllProjectModel(proj.root)
     // "special" flavors
     case "mtcore" => new MTCoreProjectModel
+    case "jdk"    => new JavaHomeProjectModel(new JVMs.JVM(proj.root))
     case _        => new DefaultProjectModel(proj.root)
   }
 
@@ -109,6 +110,7 @@ object ProjectModel {
     case "m2"     => Some(new M2ProjectModel(m2root(dep), dep.toFqId))
     case "ivy"    => Some(new IvyProjectModel(ivy2root(dep), dep.toFqId))
     case "mtcore" => Some(new MTCoreProjectModel)
+    case "jdk"    => JVMs.findBestMatch(dep.version) map(new JavaHomeProjectModel(_))
     case "dll"    => Dll.find(dep) map(new DllProjectModel(_))
     case _     => None
   }) flatMap(m => if (!m.isValid) None else Some(m))
@@ -136,14 +138,14 @@ object ProjectModel {
                                         file("src", "tests"), file("tests"))
   }
 
-  class JavaHomeProjectModel (root :File) extends ProjectModel(root) {
+  class JavaHomeProjectModel (jvm :JVMs.JVM) extends ProjectModel(jvm.root) {
     override val flavor     = "jdk"
     override def isValid    = root.isDirectory
     override def isRemote   = true
     override def name       = "jdk"
     override def groupId    = "java"
     override def artifactId = "jdk"
-    override def version    = _version
+    override def version    = jvm.version
     override def depends    = Seq()
     override def hasDocs    = true
 
@@ -152,14 +154,12 @@ object ProjectModel {
     }
 
     override def docUrl (loc :Loc, cs :List[String]) :String = {
-      "todo" // route to oracle's website?
+      val path = cs flatMap(_ split("\\.")) mkString("/")
+      s"http://docs.oracle.com/javase/${jvm.platformVers}/docs/api/$path.html"
     }
 
     // def needsReindex (lastIndexed :Long) = sourceExists(_.lastModified > lastIndexed)
     override protected def sourceExists (p :File => Boolean) = false // TODO
-
-    import scala.sys.process._
-    protected lazy val _version = Seq(file("bin", "java").getPath, "-fullversion") !!
   }
 
   abstract class POMProjectModel (root :File, val pfile :File) extends ProjectModel(root) {
@@ -183,19 +183,15 @@ object ProjectModel {
     override def isRemote = false
 
     override def depends = {
-      val realdeps = super.depends
-      // TEMP hack: add scala and java depends as appropriate
-      val haveRealJava = realdeps.exists(d => d.groupId == "java" && d.artifactId == "jdk")
-      val haveRealScala = realdeps.exists(d => d.groupId == "org.scala-lang" &&
+      val basedeps = super.depends
+      val needScalaDep = sourceExists(_.getName.endsWith(".scala"))
+      val needJavaDep = needScalaDep || sourceExists(_.getName.endsWith(".java"))
+      def haveJavaDep = basedeps.exists(d => d.groupId == "java" && d.artifactId == "jdk")
+      def haveScalaDep = basedeps.exists(d => d.groupId == "org.scala-lang" &&
         d.artifactId == "scala-library")
-      val haveScalaSource = sourceExists(_.getName.endsWith(".scala"))
-      val haveJavaSource = sourceExists(_.getName.endsWith(".java"))
-      // TODO: get versions from POM
-      val fakeScalaDep = if (haveScalaSource && !haveRealScala)
-        Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "m2", false, None)) else Seq()
-      val fakeJavaDep = if ((haveScalaSource || haveJavaSource) && !haveRealJava)
-        Seq(Depend("java", "jdk", "1.6", "m2", false, None)) else Seq()
-      realdeps ++ fakeScalaDep ++ fakeJavaDep
+      basedeps ++
+      (if (needJavaDep && !haveJavaDep) Seq(javaDepend) else Seq()) ++
+      (if (needScalaDep && !haveScalaDep) Seq(scalaDepend) else Seq())
     }
 
     override def family = {
@@ -223,6 +219,13 @@ object ProjectModel {
 
     override protected def sourceExists (p :File => Boolean) =
       exists(p)(_srcDir) || exists(p)(_testSrcDir)
+
+    private def scalaDepend = {
+      val scalaVers = _pom.getAttr("scala.version") getOrElse("2.10.1")
+      Depend("org.scala-lang", "scala-library", scalaVers, "m2", false, None)
+    }
+    // TODO: deduce JDK version from POM
+    private def javaDepend = JVMs.findDepend(JVMs.runtimeVers)
 
     private def srcDir (name :String, defdir :String) =
       _pom.buildProps.get(name) map(file(_)) getOrElse(file("src", defdir))
@@ -253,7 +256,7 @@ object ProjectModel {
       // TODO: can we figure out what Maven repository this artifact was downloaded from?
       val FqId(gid, aid, vers) = fqId
       val gpath = gid.replace('.', '/')
-      val url = new URL(s"http://repo2.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
+      val url = new URL(s"http://central.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
       log.info(s"Downloading $url...")
       val uconn = url.openConnection.asInstanceOf[HttpURLConnection]
       uconn.getResponseCode match {
@@ -264,7 +267,9 @@ object ProjectModel {
             try out.transferFrom(in, 0, Long.MaxValue)
             finally in.close()
           } finally out.close()
-        case code => log.info(s"Download failed: $code")
+        case code =>
+          log.info(s"Download failed: $code")
+          scala.io.Source.fromInputStream(uconn.getErrorStream).getLines foreach(l => log.info(l))
       }
     }
   }
@@ -279,17 +284,15 @@ object ProjectModel {
     override def version    = _extracted.getOrElse("version", super.version)
 
     override def depends = {
-      val realdeps = _extracted.get("library-dependencies") map(SBT.parseDeps) getOrElse(Seq())
-      // TEMP hack: add scala and java depends as appropriate
-      val haveRealJava = realdeps.exists(d => d.groupId == "java" && d.artifactId == "jdk")
-      val haveRealScala = realdeps.exists(d => d.groupId == "org.scala-lang" &&
+      val basedeps = _extracted.get("library-dependencies") map(SBT.parseDeps) getOrElse(Seq())
+      val needScalaDep = sourceExists(_.getName.endsWith(".scala"))
+      val needJavaDep = needScalaDep || sourceExists(_.getName.endsWith(".java"))
+      def haveJavaDep = basedeps.exists(d => d.groupId == "java" && d.artifactId == "jdk")
+      def haveScalaDep = basedeps.exists(d => d.groupId == "org.scala-lang" &&
         d.artifactId == "scala-library")
-      // TODO: get versions from SBT
-      val fakeScalaDep = if (haveRealScala) Seq() else
-        Seq(Depend("org.scala-lang", "scala-library", "2.10.1", "ivy", false, None))
-      val fakeJavaDep = if (haveRealJava) Seq() else
-        Seq(Depend("java", "jdk", "1.6", "m2", false, None))
-      realdeps ++ fakeScalaDep ++ fakeJavaDep
+      basedeps ++
+      (if (needJavaDep && !haveJavaDep) Seq(javaDepend) else Seq()) ++
+      (if (needScalaDep && !haveScalaDep) Seq(scalaDepend) else Seq())
     }
 
     override def hasDocs = file("target", "api").exists
@@ -303,12 +306,19 @@ object ProjectModel {
     override protected def testSrcDir =
       (_extracted.get("test:source-directory") map(new File(_))) orElse super.testSrcDir
 
+    private def scalaDepend = {
+      val scalaVers = _extracted.get("scalaVersion") getOrElse("2.10.1")
+      Depend("org.scala-lang", "scala-library", scalaVers, "ivy", false, None)
+    }
+    // TODO: deduce JDK version from javacOptions (e.g. -source 6)
+    private def javaDepend = JVMs.findDepend(JVMs.runtimeVers)
+
     // TODO: are there better ways to detect SBT? exists(project/*.scala)?
     private lazy val _bfile = Seq(file("build.sbt"), file("project", "Build.scala")) find(
       _.exists) getOrElse(file("build.sbt"))
 
     private lazy val _extracted = SBT.extractProps(
-      root, "name", "organization", "version", "library-dependencies",
+      root, "name", "organization", "version", "scalaVersion", "library-dependencies",
       "compile:source-directory", "test:source-directory")
   }
 
@@ -337,7 +347,7 @@ object ProjectModel {
       // // TODO: can we figure out what Maven repository this artifact was downloaded from?
       // val FqId(gid, aid, vers) = fqId
       // val gpath = gid.replace('.', '/')
-      // val url = new URL(s"http://repo2.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
+      // val url = new URL(s"http://central.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
       // log.info(s"Downloading $url...")
       // val uconn = url.openConnection.asInstanceOf[HttpURLConnection]
       // uconn.getResponseCode match {
