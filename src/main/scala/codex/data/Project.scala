@@ -72,23 +72,34 @@ class Project(
   def findDefn (name :String, kinds :Set[String] = Set()) :Iterable[Loc] =
     findDefn(name, kinds, p => l => l)
 
-  /** Like the other `findDefn`, but which maps via `map` in the owning project's context. */
-  def findDefn[T] (name :String, kinds :Set[String], map :(Project => Loc => T)) :Iterable[T] = {
-    // if we've never been updated, do a blocking rescan (we only do such on top-level projects; we
-    // let the findDefnLocal trigger a non-blocking rescan on our depends)
+  /** Like the other `findDefn`, but which maps via `xf` in the owning project's context. */
+  def findDefn[T] (name :String, kinds :Set[String], xf :(Project => Loc => T)) :Iterable[T] = {
+    // if we've never been updated, do a blocking rescan (we only do such on top-level projects;
+    // for our depends, we let the findDefnLocal trigger a non-blocking rescan)
     triggerFirstIndex()
 
-    // TODO: handle forTest
-    val (deps, rels) = (depends filterNot(_.forTest), family)
+    val (deps, rels) = (depends filterNot(_.forTest), family) // TODO: handle forTest
     log.info(s"${this.name} $id (${deps.size} depends, ${rels.size} relations) findDefn: $name")
 
-    // TODO: return results incrementally?
-
-    // search this project and its transitive depends + relations (this will auto-create projects
-    // for our transitive dependencies and relations if they don't already exist)
+    // enumerate our depends and relations (this will auto-create projects if necessary)
     val (dephs, relhs) = projects.request(ps => (deps flatMap ps.forDep, rels flatMap ps.forRoot))
-    findDefnLocal(name, kinds, map, true) ++ ((dephs ++ relhs).distinct flatMap(
-      _ request(_ findDefnLocal(name, kinds, map, false))))
+
+    def search (useCase :Boolean) = {
+      // include test depends for our project, but don't do it for our depends + relations
+      val plocs = findDefnLocal(name, kinds, xf, true, useCase)
+      val olocs = (dephs ++ relhs).distinct flatMap(
+        _ request(_ findDefnLocal(name, kinds, xf, false, useCase)))
+      plocs ++ olocs
+    }
+
+    // if the query is mixed case, do a case-sensitive query
+    val useCase = name.toLowerCase != name
+    search(useCase) match {
+      // but if that yields zero results, reissue a case insensitive query
+      case Seq() if (useCase) => search(false)
+      case xs => xs
+    }
+
     // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
 
@@ -228,23 +239,25 @@ class Project(
     // TODO: don't do this more than once a minute or so?
   }
 
-  private def findDefnLocal[T] (name :String, kinds :Set[String], f :(Project => Loc => T),
-                                incTest :Boolean) = {
+  private def findDefnLocal[T] (name :String, kinds :Set[String], xf :(Project => Loc => T),
+                                incTest :Boolean, useCase :Boolean) :Iterable[T] = {
     // queue ourselves up for a reindex check every time we're searched
     projects invoke(_ handle(id) invoke(_ reindexIfNeeded()))
 
     // log.info(s"Seeking $name in ${this.name}")
-    val mixedCase = name.toLowerCase != name
-    using(_session) {
+    val locs = using(_session) {
       val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
         (cu.isTest === false or cu.isTest === incTest) and
-        (if (mixedCase) e.name === name else e.lname === name.toLowerCase))
+        (if (useCase) e.name === name else e.lname === name.toLowerCase))
         select(e))
       for (elem <- query ;
            if (kinds.isEmpty || kinds(elem.kind)) ;
            cu    = compunitsT where(cu => cu.id === elem.unitId) single)
       yield Loc(fqId, elem.id, elem.name, elem.kind, file(root, cu.path), elem.offset)
-    } map f(this)
+    }
+
+    // map the results thorugh `xf` to put them in the form the caller wants
+    locs map(xf(this))
   }
 
   private def comps (loc :Loc) :List[String] = using(_session) {
