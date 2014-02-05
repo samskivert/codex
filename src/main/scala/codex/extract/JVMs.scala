@@ -41,11 +41,17 @@ object JVMs {
     root.listFiles map(new File(_, "Contents/Home")) map(new JVM(_))
   }
 
-  val runtimeVers = {
-    val v = System.getProperty("java.runtime.version")
-    v indexOf '_' match {
-      case -1 => v
-      case ix => v.substring(0, ix)
+  lazy val runtimeVers = {
+    // look for the currently running JVM in our JVMs list and use it's version if possible
+    val home = System.getProperty("java.home")
+    // but fallback to java.runtime.version in the event of funny business; java.runtime.version is
+    // sometimes weird (i.e. 1.8.0-b128 verses 1.8.0 in release file) but better than nothing
+    jvms find(jvm => home startsWith jvm.root.getPath) map(_.version) getOrElse {
+      val v = System.getProperty("java.runtime.version")
+      v indexOf '_' match {
+        case -1 => v
+        case ix => v.substring(0, ix)
+      }
     }
   }
 

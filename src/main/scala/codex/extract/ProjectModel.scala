@@ -151,11 +151,17 @@ object ProjectModel {
 
     override def applyToSource (f :Boolean => File => Unit) {
       f(false)(file("src.zip"))
+      if (jvm.platformVers.toInt >= 8) f(false)(file("javafx-src.zip"))
     }
 
     override def docUrl (loc :Loc, cs :List[String]) :String = {
       val path = cs flatMap(_ split("\\.")) mkString("/")
-      s"http://docs.oracle.com/javase/${jvm.platformVers}/docs/api/$path.html"
+      // TEMP: find Java 8 early access docs in special location
+      if (jvm.platformVers.toInt == 8) {
+        // and handle JFX docs being in special place; sigh...
+        val base = if (path.contains("javafx")) "jfxdocs" else "docs/api"
+        s"http://download.java.net/jdk8/$base/$path.html"
+      } else s"http://docs.oracle.com/javase/${jvm.platformVers}/docs/api/$path.html"
     }
 
     // def needsReindex (lastIndexed :Long) = sourceExists(_.lastModified > lastIndexed)
