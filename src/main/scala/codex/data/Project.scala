@@ -6,13 +6,31 @@ package codex.data
 
 import java.io.{File, IOException}
 import org.squeryl.PrimitiveTypeMode._
-import org.squeryl.annotations.Column
+import org.squeryl.annotations.{Column, Transient}
 import org.squeryl.{KeyedEntity, Schema}
 import samscala.nexus.Entity
 import scala.annotation.tailrec
 
 import codex._
 import codex.extract.{Extractor, ProjectModel, Visitor}
+
+/** [Project] related types and utilities. */
+object Project {
+
+  /** Per project configuration found in `.codex` file in project root. */
+  case class Config (
+    /** A list of path prefixes to ignore for this project. For example:
+      * `ignore: java.awt, javax.swing`
+      */
+    ignorePrefs :Seq[String]
+  )
+
+  /** Loads project configuration from `file`. */
+  def config (file :File) :Config = {
+    val data = Util.fileToMap(file)
+    Config(data.get("ignore").map(_.split(", ").toSeq).getOrElse(Seq()))
+  }
+}
 
 /** The source of information about a particular project. */
 class Project(
@@ -44,6 +62,17 @@ class Project(
 
   /** Returns whether this project is local or remote. See [[ProjectModel.isRemote]]. */
   def isRemote = _model.isRemote
+
+  /** Returns this project's configuration. */
+  def config :Project.Config = {
+    val now = System.currentTimeMillis()
+    if (now - _configChecked > 2000L) {
+      val cfile = new File(root, ".codex")
+      if (_config == null || cfile.lastModified > _configChecked) _config = Project.config(cfile)
+      _configChecked = now
+    }
+    _config
+  }
 
   /** Returns this project's complete transitive dependency set. */
   def depends :Seq[Depend] = using(_session) { dependsT.allRows.toList }
@@ -84,11 +113,14 @@ class Project(
     // enumerate our depends and relations (this will auto-create projects if necessary)
     val (dephs, relhs) = projects.request(ps => (deps flatMap ps.forDep, rels flatMap ps.forRoot))
 
+    // pass a filter function down through the search that filters out this project's ignores
+    val filter = (loc :Loc) => !(config.ignorePrefs exists(pref => loc.qualName startsWith pref))
+
     def search (useCase :Boolean) = {
       // include test depends for our project, but don't do it for our depends + relations
-      val plocs = findDefnLocal(name, kinds, xf, true, useCase)
+      val plocs = findDefnLocal(name, kinds, filter, xf, true, useCase)
       val olocs = (dephs ++ relhs).distinct flatMap(
-        _ request(_ findDefnLocal(name, kinds, xf, false, useCase)))
+        _ request(_ findDefnLocal(name, kinds, filter, xf, false, useCase)))
       plocs ++ olocs
     }
 
@@ -103,15 +135,9 @@ class Project(
     // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
 
-  /** Returns the fully qualified name of the supplied element.
-    * TODO: currently assumes Java-like element separator (.).
-    */
-  def qualify (loc :Loc) :String = comps(loc).mkString(".")
-
-  /** Returns (`loc`, `fqName`, `docUrl`) for the supplied element. */
-  def fordoc (loc :Loc) :(Loc, String, String) = {
-    val cs = comps(loc)
-    (loc, cs.mkString("."), _model.docUrl(loc, cs))
+  /** Returns (`loc`, `docUrl`) for the supplied element. */
+  def fordoc (loc :Loc) :(Loc, String) = {
+    (loc, _model.docUrl(loc))
   }
 
   /** Used by [[visit]] to visit all comp units and elements in this project. */
@@ -239,8 +265,9 @@ class Project(
     // TODO: don't do this more than once a minute or so?
   }
 
-  private def findDefnLocal[T] (name :String, kinds :Set[String], xf :(Project => Loc => T),
-                                incTest :Boolean, useCase :Boolean) :Iterable[T] = {
+  private def findDefnLocal[T] (name :String, kinds :Set[String], filter :(Loc => Boolean),
+                                xf :(Project => Loc => T), incTest :Boolean,
+                                useCase :Boolean) :Iterable[T] = {
     // queue ourselves up for a reindex check every time we're searched
     projects invoke(_ handle(id) invoke(_ reindexIfNeeded()))
 
@@ -253,37 +280,41 @@ class Project(
       for (elem <- query ;
            if (kinds.isEmpty || kinds(elem.kind)) ;
            cu    = compunitsT where(cu => cu.id === elem.unitId) single)
-      yield Loc(fqId, elem.id, elem.name, elem.kind, file(root, cu.path), elem.offset)
+      yield Loc(fqId, elem.id, elem.name, elem.kind, comps(elem.id), file(root, cu.path),
+                elem.offset)
     }
 
     // map the results thorugh `xf` to put them in the form the caller wants
-    locs map(xf(this))
+    locs filter(filter) map(xf(this))
   }
 
-  private def comps (loc :Loc) :List[String] = using(_session) {
+  private def comps (leafId :Int) :List[String] = using(_session) {
     @tailrec def loop (curId :Int, comps :List[String]) :List[String] = {
       if (curId == 0) comps
       else elementsT.lookup(curId) match {
         case Some(elem) => loop(elem.ownerId, elem.name :: comps)
         case None =>
-          log.warning("Missing element in comps()", "proj", fqId, "loc", loc, "curId", curId)
+          log.warning("Missing element in comps()", "proj", fqId, "leafId", leafId, "curId", curId)
           comps
       }
     }
-    loop(loc.elemId, Nil)
+    loop(leafId, Nil)
   }
 
   // this is initialized on the first call to lastIndexed
-  private var _lastIndexed = 0L
-  private lazy val _lastIndexedFile = file(_metaDir, "indexed.stamp")
+  @Transient private var _lastIndexed = 0L
+  @Transient private lazy val _lastIndexedFile = file(_metaDir, "indexed.stamp")
 
-  private def _model = {
+  @Transient private var _configChecked = 0L
+  @Transient private var _config :Project.Config = _
+
+  @Transient private def _model = {
     if (_modelref == null) _modelref = ProjectModel.forProject(this)
     _modelref
   }
-  private[this] var _modelref :ProjectModel = _
+  @Transient private[this] var _modelref :ProjectModel = _
 
-  private lazy val _metaDir = {
+  @Transient private lazy val _metaDir = {
     val dir = file(metaDir, "byid", id.toString)
     if (!dir.exists) dir.mkdir()
     dir
@@ -291,7 +322,7 @@ class Project(
 
   // defer opening of our database until we need it; thousands of project objects may be created at
   // app startup time, but not that many of them will actually get queried
-  private lazy val _session = {
+  @Transient private lazy val _session = {
     val sess = DB.session(_metaDir, "project", ProjectDB, 1)
     shutdownSig onEmit { sess.close }
     sess

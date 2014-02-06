@@ -22,7 +22,7 @@ class QueryServlet extends AbstractServlet {
 
     case Seq("import", defn) =>
       val (path, _) = refPath(ctx.body)
-      val ls = onProject(defn, path, _ findDefn(defn, Kinds.types, p => l => p.qualify(l)))
+      val ls = onProject(defn, path, _ findDefn(defn, Kinds.types)) map(_.qualName)
       def format (fqElem :String) = Import.computeInfo(new File(path), fqElem)
       ctx.success(matches(ls, format))
 
@@ -68,7 +68,7 @@ class QueryServlet extends AbstractServlet {
     // and deliver the results based on whether we got 0, 1, or many matches
     ls match {
       case Seq() => errNotFound(s"Found no element $defn")
-      case Seq((l, fqNm, url)) => ctx.rsp.sendRedirect(url)
+      case Seq((l, url)) => ctx.rsp.sendRedirect(url)
       case _     => ctx.success(Templates.tmpl("docs.tmpl"),
                                 Map("name" -> defn, "matches" -> ls))
     }

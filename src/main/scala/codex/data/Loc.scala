@@ -16,8 +16,13 @@ case class Loc (
   name :String,
   /** The kind of the definition. */
   kind :String,
+  /** The full path to this loc, thorugh its owning definitions. */
+  path :Seq[String],
   /** The compilation unit that contains this definition. */
   compunit :File,
   /** The character offset in `compunit` at which this definition begins. */
   offset :Int
-)
+) {
+  /** The qualified name of this Loc (i.e. its path combined with dots). */
+  lazy val qualName :String = path.mkString(".")
+}

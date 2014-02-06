@@ -30,4 +30,15 @@ object Util {
     else try Source.fromFile(file).getLines.next
     catch { case e :Exception => defval }
   }
+
+  /** Reads a file containing a sequence of `key: value` pairs into a Map. */
+  def fileToMap (file :File) :Map[String,String] = {
+    def parse (line :String) = line.split(":", 2) match {
+      case Array(key, value) => Some((key.trim, value.trim))
+      case _ => println(s"Invalid config line [file=$file, line=$line]") ; None
+    }
+    if (!file.exists) Map()
+    else try Source.fromFile(file).getLines.flatMap(parse).toMap
+    catch { case e :Exception => Map() }
+  }
 }

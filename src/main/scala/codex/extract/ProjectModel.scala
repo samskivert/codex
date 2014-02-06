@@ -54,8 +54,8 @@ abstract class ProjectModel (
   def tryGenerateDocs () {}
 
   /** Returns the doc URL for `loc`. */
-  def docUrl (loc :Loc, cs :List[String]) :String = {
-    val docurl = cs flatMap(_ split("\\.")) mkString("/")
+  def docUrl (loc :Loc) :String = {
+    val docurl = loc.path flatMap(_ split("\\.")) mkString("/")
     // TODO: figure out a less hacky way of handling Scala objects
     val hackurl = loc.kind match {
       case "object" => docurl + "$"
@@ -154,8 +154,8 @@ object ProjectModel {
       if (jvm.platformVers.toInt >= 8) f(false)(file("javafx-src.zip"))
     }
 
-    override def docUrl (loc :Loc, cs :List[String]) :String = {
-      val path = cs flatMap(_ split("\\.")) mkString("/")
+    override def docUrl (loc :Loc) :String = {
+      val path = loc.path flatMap(_ split("\\.")) mkString("/")
       // TEMP: find Java 8 early access docs in special location
       if (jvm.platformVers.toInt == 8) {
         // and handle JFX docs being in special place; sigh...
@@ -381,9 +381,9 @@ object ProjectModel {
     override def needsReindex (lastIndexed :Long) = _srcDir.lastModified > lastIndexed
     override protected def sourceExists (p :File => Boolean) = error("not used")
 
-    override def docUrl (loc :Loc, cs :List[String]) :String = {
+    override def docUrl (loc :Loc) :String = {
       // for example: http://msdn.microsoft.com/en-us/library/system.convert.aspx
-      s"http://msdn.microsoft.com/en-us/library/${cs.mkString(".").toLowerCase}.aspx"
+      s"http://msdn.microsoft.com/en-us/library/${loc.qualName.toLowerCase}.aspx"
     }
 
     lazy val _srcDir = file("mono", "mcs", "class")
@@ -433,9 +433,9 @@ object ProjectModel {
     override def applyToSource (f :Boolean => File => Unit) = f(false)(dll)
     override protected def sourceExists (p :File => Boolean) = p(dll)
 
-    override def docUrl (loc :Loc, cs :List[String]) :String = {
+    override def docUrl (loc :Loc) :String = {
       // TODO: only for monotouch &c depends
-      s"http://docs.go-mono.com/?link=T%3a${cs.mkString(".")}%2f*"
+      s"http://docs.go-mono.com/?link=T%3a${loc.qualName}%2f*"
     }
 
     private lazy val _info = Monodis.assemblyInfo(dll)
