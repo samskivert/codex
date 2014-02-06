@@ -25,4 +25,10 @@ case class Loc (
 ) {
   /** The qualified name of this Loc (i.e. its path combined with dots). */
   lazy val qualName :String = path.mkString(".")
+
+  /** Returns true if this Loc's qualified name starts with an prefix in `prefs`. */
+  def startsWith (prefs :Seq[String]) = prefs exists(pref => qualName startsWith pref)
+
+  /** Returns true if this Loc's qualified name contains any string in `strs`. */
+  def contains (strs :Seq[String]) = strs exists(str => qualName contains str)
 }

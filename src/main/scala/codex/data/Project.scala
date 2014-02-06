@@ -93,28 +93,37 @@ class Project(
 
   /** Returns all definitions in this project's extent with the specified name.
     *
-    * @param name the name of the definition. If the name is all lower case, a case insensitive
-    * match is performed, otherwise a case sensitive match is used.
+    * @param query the name of the definition (with possible prefixed path filter). If the name is
+    * all lower case, a case insensitive match is performed, otherwise a case sensitive match is
+    * used (falling back to a case insensitive match if no case sensitive results are found).
     * @param kinds a restriction on the kinds of definitions that will be returned. If empty, all
     * kinds will be returned.
     */
-  def findDefn (name :String, kinds :Set[String] = Set()) :Iterable[Loc] =
-    findDefn(name, kinds, p => l => l)
+  def findDefn (query :String, kinds :Set[String] = Set()) :Iterable[Loc] =
+    findDefn(query, kinds, p => l => l)
 
-  /** Like the other `findDefn`, but which maps via `xf` in the owning project's context. */
-  def findDefn[T] (name :String, kinds :Set[String], xf :(Project => Loc => T)) :Iterable[T] = {
+  /** Like the other `findDefn`, but which maps results via `xf` in the owning project's context. */
+  def findDefn[T] (query :String, kinds :Set[String], xf :(Project => Loc => T)) :Iterable[T] = {
     // if we've never been updated, do a blocking rescan (we only do such on top-level projects;
     // for our depends, we let the findDefnLocal trigger a non-blocking rescan)
     triggerFirstIndex()
 
     val (deps, rels) = (depends filterNot(_.forTest), family) // TODO: handle forTest
-    log.info(s"${this.name} $id (${deps.size} depends, ${rels.size} relations) findDefn: $name")
+    log.info(s"${this.name} $id (${deps.size} depends, ${rels.size} relations) findDefn: $query")
+
+    // if the name being searched contains a space, that means its a prefixed query: use the second
+    // component as the name and then filter only those results whose path contains the first
+    // component; for example: "util List" would match "java.util.List" but not "java.awt.List"
+    val comps = query.split(" ")
+    val (name, filters) = (comps.last, comps dropRight 1)
+
+    // pass a filter function down through the search that filters out this project's ignores and
+    // also restricts results to those which match the supplied query prefixes (if any)
+    val filter = (loc :Loc) => !loc.startsWith(config.ignorePrefs) && (
+      filters.isEmpty || loc.contains(filters))
 
     // enumerate our depends and relations (this will auto-create projects if necessary)
     val (dephs, relhs) = projects.request(ps => (deps flatMap ps.forDep, rels flatMap ps.forRoot))
-
-    // pass a filter function down through the search that filters out this project's ignores
-    val filter = (loc :Loc) => !(config.ignorePrefs exists(pref => loc.qualName startsWith pref))
 
     def search (useCase :Boolean) = {
       // include test depends for our project, but don't do it for our depends + relations
