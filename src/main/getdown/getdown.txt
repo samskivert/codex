@@ -7,6 +7,7 @@ appbase = http://samskivert.com/codex/client/
 # Configure the update UI
 ui.name = Codex
 ui.background_image = background.png
+ui.background = 999999
 ui.progress = 28, 176, 280, 21
 ui.progress_bar = 336600
 ui.progress_text = FFFFFF
