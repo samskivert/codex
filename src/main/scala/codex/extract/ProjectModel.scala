@@ -156,12 +156,10 @@ object ProjectModel {
 
     override def docUrl (loc :Loc) :String = {
       val path = loc.path flatMap(_ split("\\.")) mkString("/")
-      // TEMP: find Java 8 early access docs in special location
-      if (jvm.platformVers.toInt == 8) {
-        // and handle JFX docs being in special place; sigh...
-        val base = if (path.contains("javafx")) "jfxdocs" else "docs/api"
-        s"http://download.java.net/jdk8/$base/$path.html"
-      } else s"http://docs.oracle.com/javase/${jvm.platformVers}/docs/api/$path.html"
+      // handle JFX docs being in special place; sigh...
+      if (jvm.platformVers.toInt == 8 && path.contains("javafx"))
+        s"http://download.java.net/jdk8/jfxdocs/$path.html"
+      else s"http://docs.oracle.com/javase/${jvm.platformVers}/docs/api/$path.html"
     }
 
     // def needsReindex (lastIndexed :Long) = sourceExists(_.lastModified > lastIndexed)
