@@ -135,6 +135,8 @@ class Project(
         _ request(_ findDefnLocal(name, kinds, filter, xf, false, useCase))))
     }
 
+    // TODO: report when we queued up rescans on projects so caller knows to retry on nada
+
     // if the query is mixed case, do a case-sensitive query
     val useCase = name.toLowerCase != name
     search(useCase) match {
@@ -142,8 +144,6 @@ class Project(
       case Seq() if (useCase) => search(false)
       case xs => xs
     }
-
-    // TODO: report when we queued up rescans on projects so caller knows to retry on nada
   }
 
   /** Returns (`loc`, `docUrl`) for the supplied element. */
@@ -285,7 +285,7 @@ class Project(
     // convert * to % (* is easier to send in URLs)
     val qname = name.replace('*', '%')
 
-    // log.info(s"Seeking $name in ${this.name} $useCase")
+    // log.info(s"Seeking $qname in ${this.name} (case=$useCase)")
     val locs = using(_session) {
       val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
         (cu.isTest === false or cu.isTest === incTest) and
