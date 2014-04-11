@@ -128,9 +128,11 @@ class Project(
     def search (useCase :Boolean) = {
       // include test depends for our project, but don't do it for our depends + relations
       val plocs = findDefnLocal(name, kinds, filter, xf, true, useCase)
-      val olocs = (dephs ++ relhs).distinct flatMap(
-        _ request(_ findDefnLocal(name, kinds, filter, xf, false, useCase)))
-      plocs ++ olocs
+      // if name is "*" or "X*" then only provide local results because matching all symbols of all
+      // depends is uselessly excessive
+      if (name.endsWith("*") && name.length <= 2) plocs
+      else plocs ++ ((dephs ++ relhs).distinct flatMap(
+        _ request(_ findDefnLocal(name, kinds, filter, xf, false, useCase))))
     }
 
     // if the query is mixed case, do a case-sensitive query
@@ -280,11 +282,14 @@ class Project(
     // queue ourselves up for a reindex check every time we're searched
     projects invoke(_ handle(id) invoke(_ reindexIfNeeded()))
 
-    // log.info(s"Seeking $name in ${this.name}")
+    // convert * to % (* is easier to send in URLs)
+    val qname = name.replace('*', '%')
+
+    // log.info(s"Seeking $name in ${this.name} $useCase")
     val locs = using(_session) {
       val query = from(elementsT, compunitsT)((e, cu) => where(e.unitId === cu.id and
         (cu.isTest === false or cu.isTest === incTest) and
-        (if (useCase) e.name === name else e.lname === name.toLowerCase))
+        (if (useCase) e.name like qname else e.lname like qname))
         select(e))
       for (elem <- query ;
            if (kinds.isEmpty || kinds(elem.kind)) ;

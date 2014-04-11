@@ -154,8 +154,8 @@ navigate to a definition or insert an import for a class.
   :keymap '(("\C-c\C-j" . codex-doc-symbol)
             ("\C-c\C-k" . codex-open-symbol)
             ("\C-c\C-i" . codex-import-symbol)
-            ("\M-."     . codex-open-symbol)
-            ("\M-/"     . pop-codex-mark)
+            ;; ("\M-."     . codex-open-symbol)
+            ;; ("\M-/"     . pop-codex-mark)
             ("\M-]"     . next-error)
             ("\M-["     . previous-error))
   :group 'codex)
@@ -220,9 +220,9 @@ navigate to a definition or insert an import for a class.
                (message "Could not locate symbol: %s" codex-searched-sym))
               ((string= (car toks) "match")
                (ring-insert codex-marker-ring savepoint) ;; record whence we came
-               ;; TODO: use regex to strip off "match" and lineno, everything after that is
+               ;; TODO: use regex to strip off "match", lineno and name, everything after that is
                ;; the filename and may contain spaces
-               (codex-visit-file (caddr toks) (string-to-number (cadr toks)))
+               (codex-visit-file (cadddr toks) (string-to-number (cadr toks)))
                )
               (t (message (concat "Failed to parse: " (substring line 0 -1)))) ;; strip newline
               )))))
