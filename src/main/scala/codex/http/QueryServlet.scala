@@ -17,7 +17,7 @@ class QueryServlet extends AbstractServlet {
     case Seq("find", defn) =>
       val (path, _) = refPath(ctx.body)
       val ls = onProject(defn, path, _ findDefn defn)
-      def format (loc :Loc) = s"match ${loc.offset} ${loc.name} ${loc.compunit.getAbsolutePath}"
+      def format (loc :Loc) = s"match ${loc.offset} ${loc.qualName} ${loc.compunit.getAbsolutePath}"
       ctx.success(matches(ls, format))
 
     case Seq("import", defn) =>
