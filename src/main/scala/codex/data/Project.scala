@@ -109,13 +109,15 @@ class Project(
     triggerFirstIndex()
 
     val (deps, rels) = (depends filterNot(_.forTest), family) // TODO: handle forTest
-    log.info(s"${this.name} $id (${deps.size} depends, ${rels.size} relations) findDefn: $query")
 
     // if the name being searched contains a space, that means its a prefixed query: use the second
     // component as the name and then filter only those results whose path contains the first
     // component; for example: "util List" would match "java.util.List" but not "java.awt.List"
     val comps = query.split(" ")
     val (name, filters) = (comps.last, comps dropRight 1)
+
+    log.info(s"${this.name} $id (${deps.size} depends, ${rels.size} relations) findDefn: " +
+             s"(${filters.mkString(" ")}) $name")
 
     // pass a filter function down through the search that filters out this project's ignores and
     // also restricts results to those which match the supplied query prefixes (if any)
