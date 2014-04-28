@@ -93,7 +93,7 @@ abstract class AbstractServlet extends HttpServlet {
       case null => Map[String,String]()
       case params => params.split("&") map { p => p.indexOf("=") match {
         case  -1 => (p, "")
-        case idx => (p.substring(0, idx), URLDecoder.decode(p.substring(idx+1)))
+        case idx => (p.substring(0, idx), URLDecoder.decode(p.substring(idx+1), "UTF-8"))
       }} toMap
     }
 
@@ -109,7 +109,7 @@ abstract class AbstractServlet extends HttpServlet {
 
   protected def parseArgs (req :HSRequest) = req.getPathInfo match {
     case null | "" => Array[String]()
-    case info => info.substring(1).split("/")
+    case info => info.substring(1).split("/").map(URLDecoder.decode(_, "UTF-8"))
   }
 }
 
