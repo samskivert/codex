@@ -64,7 +64,9 @@ class ClikeExtractor (lang :String) extends Extractor {
         } else if (kinds(prevtok)) {
           // if our previous def had no block associated with it, we're exiting it now
           if (curdef != null) visitor.onExit(curdef)
-          visitor.onEnter(tok.sval, prevtok, tok.lineno-1)
+          // tack a $ onto Scala object names; TODO: abstract this more nicely
+          val name = tok.sval + (if (prevtok == "object") "$" else "")
+          visitor.onEnter(name, prevtok, tok.lineno-1)
           curdef = tok.sval
         }
         prevtok = tok.sval
