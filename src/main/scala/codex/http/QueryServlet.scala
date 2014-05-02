@@ -26,11 +26,18 @@ class QueryServlet extends AbstractServlet {
       def format (fqElem :String) = Import.computeInfo(new File(path), fqElem)
       ctx.success(matches(ls, format))
 
+    // TODO: URL encode the path so that it's just one element (so as to work on non-Unix
+    // platforms... blah)
     case Seq("findoc", defn, rest @ _*) =>
+      val path = "/" + rest.mkString(File.separator)
+      docQuery(ctx, reqProject(path), defn)
+
+    case Seq("findproj", rest @ _*) =>
       // TODO: URL encode the path so that it's just one element (so as to work on non-Unix
       // platforms... blah)
       val path = "/" + rest.mkString(File.separator)
-      docQuery(ctx, reqProject(path), defn)
+      val projId = reqProject(path) request (_.id)
+      ctx.rsp.sendRedirect(s"/project/$projId")
 
     case Seq("doc", grpId, artId, vers) =>
       val query = ctx.reqParam("q")
