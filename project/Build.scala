@@ -54,11 +54,20 @@ object CodexBuild extends Build {
     scalacOptions ++= Seq("-feature", "-language:postfixOps"),
 
     // allows SBT to run junit tests
-    libraryDependencies += "com.novocode" % "junit-interface" % "0.7" % "test->default",
+    libraryDependencies += "com.novocode" % "junit-interface" % "0.10" % "test->default",
+    testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v"),
 
-    // various proguard jiggery pokery
-    ProguardKeys.options in Proguard += ProguardOptions.keepMain("codex.Codex"),
-    ProguardKeys.options in Proguard ++= Seq(
+    // tasks for generating and uploading getdown client
+    getdown <<= getdownTask, // dependsOn (Proguard, ProguardKeys.proguard),
+    upload  <<= uploadTask dependsOn getdown
+  )
+
+  // various proguard jiggery pokery
+  import ProguardKeys._
+  val codexProguardSettings = seq(
+    proguardVersion in Proguard := "4.11",
+    options in Proguard += ProguardOptions.keepMain("codex.Codex"),
+    options in Proguard ++= Seq(
       "-dontoptimize",
       "-dontobfuscate",
       "-keep class net.sf.cglib.** { *; }",
@@ -86,18 +95,14 @@ object CodexBuild extends Build {
       "-dontnote scala.**",
       "-dontwarn scala.**"
     ),
-    ProguardKeys.inputs in Proguard ~= { _ filterNot passThrough },
-    ProguardKeys.inputFilter in Proguard := { _.name match {
+    inputs in Proguard ~= { _ filterNot passThrough },
+    inputFilter in Proguard := { _.name match {
       case nm if (nm.startsWith("jetty-"))        => Some("!META-INF/MANIFEST.MF,!*.html")
       case nm if (nm.startsWith("javax.servlet")) => Some("!META-INF/**")
       case _                                      => Some("!META-INF/MANIFEST.MF")
     }},
     // for fuck's sake sbt and sbt-proguard authors!
-    javaOptions in (Proguard, ProguardKeys.proguard) := Seq("-mx1024M"),
-
-    // tasks for generating and uploading getdown client
-    getdown <<= getdownTask, // dependsOn (Proguard, ProguardKeys.proguard),
-    upload  <<= uploadTask dependsOn getdown
+    javaOptions in (Proguard, proguard) := Seq("-mx1024M")
   )
 
   lazy val root = Project("codex", file("."), settings = {
@@ -106,6 +111,7 @@ object CodexBuild extends Build {
     proguardSettings ++
     net.virtualvoid.sbt.graph.Plugin.graphSettings ++
     spray.revolver.RevolverPlugin.Revolver.settings ++
-    codexSettings
+    codexSettings ++
+    codexProguardSettings
   })
 }
