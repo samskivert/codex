@@ -4,9 +4,8 @@
 
 package codex.extract
 
-import java.io.{File, FileOutputStream}
-import java.net.{HttpURLConnection, URL}
-import java.nio.channels.Channels
+import java.io.File
+import java.net.URL
 import pomutil.{POM, Dependency}
 import scala.collection.mutable.{Set => MSet}
 
@@ -261,20 +260,7 @@ object ProjectModel {
       val FqId(gid, aid, vers) = fqId
       val gpath = gid.replace('.', '/')
       val url = new URL(s"http://central.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
-      log.info(s"Downloading $url...")
-      val uconn = url.openConnection.asInstanceOf[HttpURLConnection]
-      uconn.getResponseCode match {
-        case 200 =>
-          val out = new FileOutputStream(artifact(cfier)).getChannel
-          try {
-            val in = Channels.newChannel(uconn.getInputStream)
-            try out.transferFrom(in, 0, Long.MaxValue)
-            finally in.close()
-          } finally out.close()
-        case code =>
-          log.info(s"Download failed: $code")
-          scala.io.Source.fromInputStream(uconn.getErrorStream).getLines foreach(l => log.info(l))
-      }
+      downloader request(_.download(url, artifact(cfier)))
     }
   }
 
@@ -353,12 +339,7 @@ object ProjectModel {
       // val gpath = gid.replace('.', '/')
       // val url = new URL(s"http://central.maven.org/maven2/$gpath/$aid/$vers/$aid-$vers-$cfier.jar")
       // log.info(s"Downloading $url...")
-      // val uconn = url.openConnection.asInstanceOf[HttpURLConnection]
-      // uconn.getResponseCode match {
-      //   case 200 => new FileOutputStream(artifact(cfier)).getChannel transferFrom(
-      //     Channels.newChannel(uconn.getInputStream), 0, Long.MaxValue)
-      //   case code => log.info(s"Download failed: $code")
-      // }
+      // downloader request(_.download(url, artifact(cfier))
     }
   }
 

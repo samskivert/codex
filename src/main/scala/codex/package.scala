@@ -66,7 +66,12 @@ package object codex {
     dir
   }
 
-  val projects = entity(new data.Projects)
+  /** The entity that manages our projects. */
+  val projects = entity(new data.Projects())
+
+  /** An entity that handles downloading artifacts
+    * (one at a time so as not to anger Maven Central). */
+  val downloader = entity(new http.Downloader())
 
   /** Creates a file with `path`. */
   def file (path :String) = new File(path)
