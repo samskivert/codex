@@ -308,7 +308,7 @@ object ProjectModel {
       _.exists) getOrElse(file("build.sbt"))
 
     private lazy val _extracted = SBT.extractProps(
-      root, "name", "organization", "version", "scalaVersion", "library-dependencies",
+      root, "name", "organization", "version", "scala-version", "library-dependencies",
       "compile:source-directory", "test:source-directory")
   }
 
