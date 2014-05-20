@@ -297,7 +297,7 @@ object ProjectModel {
       (_extracted.get("test:source-directory") map(new File(_))) orElse super.testSrcDir
 
     private def scalaDepend = {
-      val scalaVers = _extracted.get("scalaVersion") getOrElse("2.10.1")
+      val scalaVers = _extracted.get("scala-version") getOrElse("2.10.1")
       Depend("org.scala-lang", "scala-library", scalaVers, "ivy", false, None)
     }
     // TODO: deduce JDK version from javacOptions (e.g. -source 6)
